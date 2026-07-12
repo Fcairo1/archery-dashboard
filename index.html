@@ -72,6 +72,29 @@ select{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size
 </div>
 
 <div class="card">
+  <h2>Piso e teto <span style="font-weight:400;color:var(--muted)">(mín. e máx. das últimas 10 sessões — piso subindo = consistência real)</span></h2>
+  <div class="chartbox" style="height:220px"><canvas id="chBand"></canvas></div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2>Descanso × desempenho <span style="font-weight:400;color:var(--muted)">(dias desde o treino anterior)</span></h2>
+    <div class="chartbox" style="height:200px"><canvas id="chGap"></canvas></div>
+    <div class="legend-note" id="gapR"></div>
+  </div>
+  <div class="card">
+    <h2>Volume × desempenho <span style="font-weight:400;color:var(--muted)">(flechas na sessão × pontuação)</span></h2>
+    <div class="chartbox" style="height:200px"><canvas id="chVolScore"></canvas></div>
+    <div class="legend-note" id="volR"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>🏆 Recordes <span style="font-weight:400;color:var(--muted)">(no filtro atual)</span></h2>
+  <div id="records"></div>
+</div>
+
+<div class="card">
   <h2 style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">Detalhe da sessão <select id="selSession"></select></h2>
   <div class="detail-kpis" id="dKpis"></div>
   <div class="chartbox" style="height:240px"><canvas id="chSession"></canvas></div>
@@ -200,6 +223,55 @@ function delta(cur,prevV,inverted){
   return `<span class="${good?'up':'down'}">${df>0?'↑':'↓'} ${fmt(Math.abs(df))}</span>`;
 }
 
+// ===== análises =====
+function linreg(xs,ys){
+  const n=xs.length; if(n<3) return null;
+  const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
+  let num=0,den=0;
+  for(let i=0;i<n;i++){num+=(xs[i]-mx)*(ys[i]-my);den+=(xs[i]-mx)*(xs[i]-mx);}
+  if(!den) return null;
+  const b=num/den; return {a:my-b*mx,b};
+}
+function pearson(xs,ys){
+  const n=xs.length; if(n<3) return null;
+  const mx=xs.reduce((a,b)=>a+b,0)/n, my=ys.reduce((a,b)=>a+b,0)/n;
+  let num=0,dx=0,dy=0;
+  for(let i=0;i<n;i++){num+=(xs[i]-mx)*(ys[i]-my);dx+=(xs[i]-mx)*(xs[i]-mx);dy+=(ys[i]-my)*(ys[i]-my);}
+  return dx&&dy?num/Math.sqrt(dx*dy):null;
+}
+const rLabel=r=>r==null?'Poucos dados para correlação.':`Correlação: r = ${fmt(r)} (${Math.abs(r)<0.2?'praticamente nula':Math.abs(r)<0.4?'fraca':Math.abs(r)<0.6?'moderada':'forte'})`;
+const OFF_VALS=[0,1,2,3,4,5,6,7,8,9,10,10]; // pontuação oficial: X vale 10
+const waMean=s=>s.counts.reduce((a,c,i)=>a+c*OFF_VALS[i],0)/s.n;
+const days=iso=>Math.round(new Date(iso+'T00:00:00Z').getTime()/86400000);
+
+function renderRecords(){
+  const box=$('records');
+  if(!VIEW.length){box.innerHTML='';return;}
+  const best=VIEW.reduce((a,s)=>s.score>a.score?s:a);
+  const bGold=VIEW.reduce((a,s)=>s.gold>a.gold?s:a);
+  const bSd=VIEW.reduce((a,s)=>s.sd<a.sd?s:a);
+  let cur=0,bst=0,curImp=0,bImp=0;
+  VIEW.forEach((s,i)=>{
+    cur=s.counts[0]===0?cur+1:0; if(cur>bst)bst=cur;
+    curImp=i>0&&s.score>VIEW[i-1].score?curImp+1:0; if(curImp>bImp)bImp=curImp;
+  });
+  let noMissNow=0; for(let i=VIEW.length-1;i>=0&&VIEW[i].counts[0]===0;i--)noMissNow++;
+  const last=VIEW[VIEW.length-1];
+  const rows=[
+    ['Melhor pontuação',`${fmt(best.score)} em ${dBR(best.iso)}`],
+    ['Melhor % de ouro',`${pct(bGold.gold)} em ${dBR(bGold.iso)}`],
+    ['Sessão mais agrupada',`dispersão ${fmt(bSd.sd)} em ${dBR(bSd.iso)}`],
+    ['Sessões seguidas sem errar',`${bst} (sequência atual: ${noMissNow})`],
+    ['Maior sequência de melhora',`${bImp} ${bImp===1?'sessão':'sessões'} consecutivas`]
+  ];
+  if(last.era==='18m'){
+    const wa=Math.round(waMean(last)*60), waBest=Math.max(...VIEW.filter(s=>s.era==='18m').map(s=>Math.round(waMean(s)*60)));
+    rows.push(['Equivalente prova WA 18 m',`última: ~${wa} pts · melhor: ~${waBest} pts (60 flechas, X=10, máx. 600)`]);
+  }
+  box.innerHTML=rows.map(([l,v])=>`<div class="mstone"><span class="dt" style="min-width:200px">${l}</span><span><b>${v}</b></span></div>`).join('');
+}
+
+
 // ===== estado / UI =====
 let ALL=[], VIEW=[], charts={};
 const $=id=>document.getElementById(id);
@@ -228,13 +300,17 @@ function kpis(){
   const arrows=VIEW.reduce((a,s)=>a+s.n,0);
   const best=VIEW.reduce((a,s)=>s.score>(a?.score??-1)?s:a,null);
   const r5=VIEW.slice(-5), roll=r5.length?r5.reduce((a,s)=>a+s.score,0)/r5.length:null;
+  const t0k=VIEW.length?days(VIEW[0].iso):0;
+  const regK=linreg(VIEW.map(s=>days(s.iso)-t0k),VIEW.map(s=>s.score));
+  const slope=regK?regK.b*30:null;
   $('kpis').innerHTML=`
   <div class="kpi"><div class="l">Sessões</div><div class="v">${VIEW.length}</div></div>
   <div class="kpi"><div class="l">Flechas</div><div class="v">${arrows.toLocaleString('pt-BR')}</div></div>
   <div class="kpi"><div class="l">Última pontuação</div><div class="v">${fmt(last?.score)}</div><div class="d">${last?dBR(last.iso):''} ${delta(last?.score,prev?.score)}</div></div>
   <div class="kpi"><div class="l">Média (5 últimas)</div><div class="v">${fmt(roll)}</div></div>
   <div class="kpi"><div class="l">Recorde</div><div class="v">${fmt(best?.score)}</div><div class="d">${best?dBR(best.iso):''}</div></div>
-  <div class="kpi"><div class="l">Ouro na última</div><div class="v">${pct(last?.gold)}</div><div class="d">amarelo + centro</div></div>`;
+  <div class="kpi"><div class="l">Ouro na última</div><div class="v">${pct(last?.gold)}</div><div class="d">amarelo + centro</div></div>
+  <div class="kpi"><div class="l">Tendência</div><div class="v ${slope>0?'up':slope<0?'down':''}">${slope==null?'—':(slope>0?'+':'')+fmt(slope)}</div><div class="d">pts/mês (regressão)</div></div>`;
 }
 
 const msPlugin={
@@ -264,10 +340,16 @@ function render(){
     const i=VIEW.findIndex(s=>s.iso>=d);
     if(i>0) msIdx.push([i,l]);
   }
+  // tendência (regressão linear sobre o tempo)
+  const t0=VIEW.length?days(VIEW[0].iso):0;
+  const xsD=VIEW.map(s=>days(s.iso)-t0);
+  const reg=linreg(xsD,VIEW.map(s=>s.score));
+  const trendData=reg?xsD.map(x=>reg.a+reg.b*x):null;
   const evo=mkChart('chEvo',{type:'line',
     data:{labels,datasets:[
       {label:'Pontuação',data:VIEW.map(s=>s.score),borderColor:'#b45309',backgroundColor:'#b45309',pointRadius:2.5,pointHoverRadius:5,tension:.25},
-      {label:'Média móvel (5)',data:roll,borderColor:'rgba(15,23,42,.45)',borderDash:[6,4],pointRadius:0,tension:.35}
+      {label:'Média móvel (5)',data:roll,borderColor:'rgba(15,23,42,.45)',borderDash:[6,4],pointRadius:0,tension:.35},
+      ...(trendData?[{label:'Tendência',data:trendData,borderColor:'rgba(22,163,74,.7)',borderDash:[2,3],pointRadius:0,pointHoverRadius:0}]:[])
     ]},
     options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
       plugins:{legend:{labels:{boxWidth:12,font:{size:11}}},
@@ -300,6 +382,40 @@ function render(){
     data:{labels,datasets:[{label:'Flechas',data:VIEW.map(s=>s.n),backgroundColor:'rgba(180,83,9,.55)'}]},
     options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
       scales:{y:{ticks:{font:{size:10}}},x:{ticks:{font:{size:9},maxTicksLimit:8}}}}});
+
+  // piso e teto (janela de 10)
+  const W=10;
+  const mins=VIEW.map((_,i)=>Math.min(...VIEW.slice(Math.max(0,i-W+1),i+1).map(s=>s.score)));
+  const maxs=VIEW.map((_,i)=>Math.max(...VIEW.slice(Math.max(0,i-W+1),i+1).map(s=>s.score)));
+  mkChart('chBand',{type:'line',
+    data:{labels,datasets:[
+      {label:'Teto (máx. 10 sessões)',data:maxs,borderColor:'#16a34a',pointRadius:0,tension:.3},
+      {label:'Piso (mín. 10 sessões)',data:mins,borderColor:'#dc2626',pointRadius:0,tension:.3,fill:'-1',backgroundColor:'rgba(22,163,74,.07)'},
+      {label:'Pontuação',data:VIEW.map(s=>s.score),borderColor:'rgba(15,23,42,.2)',pointRadius:1.5,tension:.25}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{boxWidth:12,font:{size:10}}}},
+      scales:{y:{ticks:{font:{size:10}}},x:{ticks:{font:{size:9},maxTicksLimit:10}}}}});
+
+  // descanso × desempenho
+  const gapsX=[],gapsY=[];
+  for(let i=1;i<VIEW.length;i++){gapsX.push(days(VIEW[i].iso)-days(VIEW[i-1].iso));gapsY.push(VIEW[i].score);}
+  mkChart('chGap',{type:'scatter',
+    data:{datasets:[{data:gapsX.map((g,i)=>({x:g,y:gapsY[i]})),backgroundColor:'rgba(2,132,199,.65)'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>`${c.parsed.x} dias de intervalo → ${fmt(c.parsed.y)} pts`}}},
+      scales:{x:{title:{display:true,text:'dias desde o treino anterior',font:{size:10}},ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
+  $('gapR').textContent=rLabel(pearson(gapsX,gapsY));
+
+  // volume × desempenho
+  mkChart('chVolScore',{type:'scatter',
+    data:{datasets:[{data:VIEW.map(s=>({x:s.n,y:s.score})),backgroundColor:'rgba(180,83,9,.65)'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{label:c=>`${c.parsed.x} flechas → ${fmt(c.parsed.y)} pts`}}},
+      scales:{x:{title:{display:true,text:'flechas na sessão',font:{size:10}},ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}});
+  $('volR').textContent=rLabel(pearson(VIEW.map(s=>s.n),VIEW.map(s=>s.score)));
+
+  renderRecords();
+
 
   // seletor de sessão
   const sel=$('selSession'); sel.innerHTML='';
