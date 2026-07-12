@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Registrar sessão — Archery Accuracy</title>
+<style>
+:root{color-scheme:light;
+  --bg:#f8fafc;--card:#fff;--ink:#0f172a;--muted:#64748b;--line:#e2e8f0;--accent:#b45309;
+  --good:#16a34a;--bad:#dc2626;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:14px;max-width:760px;margin:0 auto}
+h1{font-size:18px;margin:0 0 2px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.sub{color:var(--muted);font-size:12px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
+label{font-size:11px;color:var(--muted);display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:.03em}
+input,select{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:14px;background:#fff}
+input[type=number]{width:74px} input[type=date]{width:150px}
+button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 13px;font-size:13px;cursor:pointer;color:var(--ink)}
+button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.warn{color:var(--bad);border-color:#fecaca}
+button:disabled{opacity:.4;cursor:default}
+.status{font-size:14px;font-weight:700;margin:8px 0 6px}
+.status small{font-weight:400;color:var(--muted)}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.toolbar button{font-size:12px;padding:6px 10px}
+#alvoWrap{position:relative;user-select:none;-webkit-user-select:none}
+svg{width:100%;height:auto;display:block;border-radius:10px;background:#eef2f7;touch-action:none}
+.hint{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:7px 10px;font-size:12.5px;margin:8px 0}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+td,th{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
+td:last-child,th:last-child{text-align:right}
+.sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;border:1px solid rgba(0,0,0,.25);vertical-align:baseline}
+.big{font-size:19px;font-weight:700}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:560px){.grid2{grid-template-columns:1fr}}
+.nudge{display:grid;grid-template-columns:repeat(3,40px);gap:4px;justify-content:center}
+.nudge button{padding:7px 0;font-size:14px}
+.copybox{background:#f1f5f9;border-radius:8px;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre;max-height:150px;overflow:auto}
+a{color:var(--accent)}
+.ok{color:var(--good);font-size:12px}
+</style>
+</head>
+<body>
+<h1>📝 Registrar sessão <a href="index.html" style="font-size:12px;font-weight:400">← voltar ao dashboard</a></h1>
+<div class="sub">Clique no alvo onde cada flecha acertou. Anel calculado automaticamente (regra oficial da linha incluída).</div>
+
+<div class="card">
+  <div class="row">
+    <div><label>Data do treino</label><input type="date" id="cfgDate"></div>
+    <div><label>Flechas/rodada (padrão)</label><input type="number" id="cfgPer" value="5" min="1" max="12"></div>
+    <div><label>Ø flecha (mm)</label><input type="number" id="cfgDiam" value="6" min="4" max="12" step="0.5"></div>
+    <div><label>Fundo</label>
+      <select id="cfgMode">
+        <option value="target">Alvo digital</option>
+        <option value="photo">Foto da rodada</option>
+      </select>
+    </div>
+    <div id="photoBox" style="display:none"><label>Foto</label><input type="file" id="cfgPhoto" accept="image/*"></div>
+  </div>
+  <div class="hint" id="hint" style="display:none"></div>
+</div>
+
+<div class="card">
+  <div class="status" id="status"></div>
+  <div id="alvoWrap"><svg id="alvo" viewBox="-220 -220 440 440" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <div class="toolbar">
+    <button id="btnMiss">Fora do alvo (erro)</button>
+    <button id="btnPlus1">＋1 nesta rodada</button>
+    <button id="btnClose">Fechar rodada agora</button>
+    <button id="btnUndo">↩ Desfazer última</button>
+    <button id="btnZoom">🔍 Zoom</button>
+  </div>
+  <div class="grid2">
+    <div>
+      <label>Ajuste fino da flecha selecionada (1 mm)</label>
+      <div class="nudge">
+        <span></span><button data-n="0,-1">▲</button><span></span>
+        <button data-n="-1,0">◀</button><button id="btnDel" class="warn">✕</button><button data-n="1,0">▶</button>
+        <span></span><button data-n="0,1">▼</button><span></span>
+      </div>
+    </div>
+    <div id="selInfo" style="font-size:12.5px;color:var(--muted)">Nenhuma flecha selecionada.</div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="row" style="justify-content:space-between">
+    <div><span class="big" id="tTotal">0</span> <small style="color:var(--muted)">flechas</small>
+      &nbsp;·&nbsp; <span class="big" id="tAvg">—</span> <small style="color:var(--muted)">pontuação média</small></div>
+    <div style="font-size:12.5px;color:var(--muted)" id="tSpatial"></div>
+  </div>
+  <table id="tally"></table>
+</div>
+
+<div class="card">
+  <h3 style="margin:0 0 8px;font-size:14px">Enviar para a planilha</h3>
+  <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">
+    Copie e cole na célula <b>TOTAL ARROWS</b> do novo bloco da aba Tabelas — o total e as 12 contagens entram de uma vez, na ordem certa das linhas.
+  </div>
+  <div class="copybox" id="copyPreview"></div>
+  <div class="toolbar">
+    <button class="primary" id="btnCopy">📋 Copiar (total + contagens)</button>
+    <button id="btnJson">⬇ Baixar sessão com coordenadas (JSON)</button>
+    <button class="warn" id="btnClear">🗑 Limpar sessão</button>
+  </div>
+  <span class="ok" id="copyOk"></span>
+</div>
+
+<script>
+'use strict';
+const CATS=['Fora','Branco ext.','Branco int.','Preto ext.','Preto int.','Azul ext.','Azul int.','Vermelho ext.','Vermelho int.','Amarelo ext.','Amarelo int.','Centro (X)'];
+const CAT_COLORS=['#a78bfa','#f8fafc','#e8edf3','#2b3442','#0f172a','#5db3e8','#2277c9','#ef6a5f','#d9302c','#ffe066','#ffce00','#ec4899'];
+const R_OUT=200, R_X=10, STEP=20; // mm no alvo de 40 cm
+const $=id=>document.getElementById(id);
+
+// ---- classificação (regra da linha: borda interna do tubo) ----
+function classify(x,y,arrowDiamMm){
+  const eff=Math.max(0,Math.hypot(x,y)-arrowDiamMm/2);
+  if(eff>R_OUT) return 0;
+  if(eff<=R_X) return 11;
+  return 11-Math.max(1,Math.ceil(eff/STEP)); // 20→10 ... 200→1
+}
+
+// ---- estado ----
+let S={date:new Date().toISOString().slice(0,10),per:5,diam:6,arrows:[],round:1,limit:5,photo:null,cal:null};
+let sel=-1, zoom=false, calStep=null;
+
+function save(){ try{localStorage.setItem('arrowreg_session',JSON.stringify({...S,photo:null,cal:S.cal}));}catch(e){} }
+function restore(){
+  try{
+    const d=JSON.parse(localStorage.getItem('arrowreg_session')||'null');
+    if(d&&d.arrows&&d.arrows.length&&confirm(`Continuar a sessão de ${d.date} com ${d.arrows.length} flechas já marcadas?`)){
+      S={...S,...d,photo:null};
+    } else localStorage.removeItem('arrowreg_session');
+  }catch(e){}
+}
+
+// ---- desenho do alvo ----
+const NS='http://www.w3.org/2000/svg';
+function el(t,attrs){const e=document.createElementNS(NS,t);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
+function drawTarget(){
+  const svg=$('alvo'); svg.innerHTML='';
+  const photoMode=S.photo&&S.cal;
+  if(S.photo){
+    const im=el('image',{href:S.photo,x:0,y:0});
+    if(S.cal){
+      const s=R_OUT/S.cal.r;
+      im.setAttribute('transform',`scale(${s}) translate(${-S.cal.cx},${-S.cal.cy})`);
+    } else {
+      // sem calibração: mostra a foto inteira centrada
+      im.setAttribute('transform','translate(-220,-220)');
+      im.setAttribute('width',440); im.setAttribute('height',440);
+      im.setAttribute('preserveAspectRatio','xMidYMid meet');
+    }
+    svg.appendChild(im);
+  }
+  const zones=[[200,1],[180,2],[160,3],[140,4],[120,5],[100,6],[80,7],[60,8],[40,9],[20,10]];
+  for(const [r,cat] of zones){
+    svg.appendChild(el('circle',{cx:0,cy:0,r,
+      fill:photoMode?'none':CAT_COLORS[cat],
+      stroke:photoMode?'rgba(255,80,150,.85)':(cat===4||cat===3?'#e2e8f0':'#334155'),
+      'stroke-width':photoMode?1.2:0.7}));
+  }
+  svg.appendChild(el('circle',{cx:0,cy:0,r:R_X,fill:'none',stroke:photoMode?'rgba(255,80,150,.85)':'#334155','stroke-width':photoMode?1.2:0.7}));
+  svg.appendChild(el('line',{x1:-4,y1:0,x2:4,y2:0,stroke:photoMode?'#ff50a0':'#334155','stroke-width':.8}));
+  svg.appendChild(el('line',{x1:0,y1:-4,x2:0,y2:4,stroke:photoMode?'#ff50a0':'#334155','stroke-width':.8}));
+  // marcadores
+  S.arrows.forEach((a,i)=>{
+    if(a.cat===0&&a.x==null) return;
+    const g=el('g',{'data-i':i,cursor:'pointer'});
+    g.appendChild(el('circle',{cx:a.x,cy:a.y,r:i===sel?5:3.5,fill:i===sel?'#0ea5e9':'#111827',stroke:'#fff','stroke-width':1.2}));
+    g.appendChild(el('text',{x:a.x,y:a.y+1.6,'text-anchor':'middle','font-size':4.5,fill:'#fff','font-weight':'700'})).textContent=a.round;
+    svg.appendChild(g);
+  });
+  svg.setAttribute('viewBox', zoom?'-110 -110 220 220':'-220 -220 440 440');
+}
+
+// ---- interação ----
+function svgPoint(ev){
+  const svg=$('alvo'), pt=svg.createSVGPoint();
+  pt.x=ev.clientX; pt.y=ev.clientY;
+  const p=pt.matrixTransform(svg.getScreenCTM().inverse());
+  return {x:p.x,y:p.y};
+}
+$('alvo').addEventListener('pointerdown',ev=>{
+  const g=ev.target.closest('g[data-i]');
+  if(g){ sel=+g.dataset.i; render(); return; }
+  const p=svgPoint(ev);
+  if(calStep==='center'){ S._c=p; calStep='edge'; setHint('Agora clique na <b>borda externa do alvo</b> (limite do branco de fora) na foto.'); return; }
+  if(calStep==='edge'){
+    // converter: cliques foram em coords do viewBox com foto "crua" (translate -220)
+    const cx=S._c.x+220, cy=S._c.y+220, ex=p.x+220, ey=p.y+220;
+    const rawScale=Math.min(440/S._imgW,440/S._imgH); // preserveAspectRatio meet
+    const offX=(440-S._imgW*rawScale)/2, offY=(440-S._imgH*rawScale)/2;
+    const icx=(cx-offX)/rawScale, icy=(cy-offY)/rawScale, iex=(ex-offX)/rawScale, iey=(ey-offY)/rawScale;
+    S.cal={cx:icx,cy:icy,r:Math.hypot(iex-icx,iey-icy)};
+    calStep=null; setHint('Calibrado! Agora clique nas flechas em cima da foto. Confira se os anéis rosa batem com o alvo; se não, recarregue a foto.');
+    render(); return;
+  }
+  if(Math.hypot(p.x,p.y)>R_OUT+18) return; // clique muito longe: ignora (usar botão Fora)
+  addArrow(p.x,p.y);
+});
+function addArrow(x,y){
+  const inRound=S.arrows.filter(a=>a.round===S.round).length;
+  if(inRound>=S.limit){ S.round++; S.limit=S.per; }
+  const cat=(x==null)?0:classify(x,y,S.diam);
+  S.arrows.push({x,y,cat,round:S.round});
+  sel=S.arrows.length-1;
+  render();
+}
+$('btnMiss').onclick=()=>addArrow(null,null);
+$('btnPlus1').onclick=()=>{S.limit++;render();};
+$('btnClose').onclick=()=>{ if(S.arrows.some(a=>a.round===S.round)){S.round++;S.limit=S.per;} render(); };
+$('btnUndo').onclick=()=>{ S.arrows.pop(); sel=S.arrows.length-1; fixRound(); render(); };
+$('btnDel').onclick=()=>{ if(sel>=0){S.arrows.splice(sel,1); sel=-1; fixRound(); render();} };
+function fixRound(){ S.round=S.arrows.length?Math.max(...S.arrows.map(a=>a.round)):1; if(!S.arrows.length)S.limit=S.per; }
+document.querySelectorAll('.nudge button[data-n]').forEach(b=>b.onclick=()=>{
+  if(sel<0||S.arrows[sel].x==null) return;
+  const [dx,dy]=b.dataset.n.split(',').map(Number);
+  const a=S.arrows[sel]; a.x+=dx; a.y+=dy; a.cat=classify(a.x,a.y,S.diam);
+  render();
+});
+$('btnZoom').onclick=()=>{zoom=!zoom;render();};
+$('btnClear').onclick=()=>{ if(confirm('Apagar todas as flechas desta sessão?')){S.arrows=[];S.round=1;S.limit=S.per;sel=-1;localStorage.removeItem('arrowreg_session');render();} };
+
+// ---- config ----
+$('cfgDate').value=S.date;
+$('cfgDate').onchange=e=>{S.date=e.target.value;render();};
+$('cfgPer').onchange=e=>{S.per=Math.max(1,+e.target.value||5);S.limit=Math.max(S.limit,S.per);render();};
+$('cfgDiam').onchange=e=>{S.diam=+e.target.value||6;S.arrows.forEach(a=>{if(a.x!=null)a.cat=classify(a.x,a.y,S.diam);});render();};
+$('cfgMode').onchange=e=>{
+  const photo=e.target.value==='photo';
+  $('photoBox').style.display=photo?'':'none';
+  if(!photo){S.photo=null;S.cal=null;calStep=null;setHint('');render();}
+};
+$('cfgPhoto').onchange=e=>{
+  const f=e.target.files[0]; if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{ S._imgW=img.naturalWidth;S._imgH=img.naturalHeight;S.photo=rd.result;S.cal=null;calStep='center';
+      setHint('Calibração: clique no <b>centro do alvo</b> na foto.');render(); };
+    img.src=rd.result;
+  };
+  rd.readAsDataURL(f);
+};
+function setHint(h){ $('hint').style.display=h?'':'none'; $('hint').innerHTML=h; }
+
+// ---- resumo / saída ----
+function counts(){ const c=Array(12).fill(0); S.arrows.forEach(a=>c[a.cat]++); return c; }
+function render(){
+  drawTarget();
+  const c=counts(), n=S.arrows.length;
+  const inRound=S.arrows.filter(a=>a.round===S.round).length;
+  $('status').innerHTML=`Rodada ${S.round} — flecha ${Math.min(inRound+1,S.limit)}/${S.limit} <small>· ${S.date.split('-').reverse().join('/')}</small>`;
+  const avg=n?S.arrows.reduce((s,a)=>s+a.cat,0)/n:null;
+  $('tTotal').textContent=n;
+  $('tAvg').textContent=avg==null?'—':avg.toLocaleString('pt-BR',{maximumFractionDigits:2});
+  const hits=S.arrows.filter(a=>a.x!=null);
+  if(hits.length>=3){
+    const mx=hits.reduce((s,a)=>s+a.x,0)/hits.length, my=hits.reduce((s,a)=>s+a.y,0)/hits.length;
+    const mr=hits.reduce((s,a)=>s+Math.hypot(a.x,a.y),0)/hits.length;
+    $('tSpatial').innerHTML=`centroide: ${mx>1?'→':mx<-1?'←':''}${Math.abs(mx).toFixed(0)}mm, ${my>1?'↓':my<-1?'↑':''}${Math.abs(my).toFixed(0)}mm · dist. média ${mr.toFixed(0)}mm`;
+  } else $('tSpatial').textContent='';
+  $('tally').innerHTML='<tr><th>Anel</th><th>Flechas</th></tr>'+CATS.map((l,i)=>
+    `<tr><td><span class="sw" style="background:${CAT_COLORS[i]}"></span>${l}</td><td>${c[i]}</td></tr>`).join('');
+  $('copyPreview').textContent=[n,...c].join('\n');
+  $('selInfo').innerHTML=sel>=0?(S.arrows[sel].x==null?`#${sel+1}: Fora (erro), rodada ${S.arrows[sel].round}`:
+    `#${sel+1}: <b>${CATS[S.arrows[sel].cat]}</b>, rodada ${S.arrows[sel].round} · ${Math.hypot(S.arrows[sel].x,S.arrows[sel].y).toFixed(0)}mm do centro`):'Nenhuma flecha selecionada.';
+  save();
+}
+$('btnCopy').onclick=async()=>{
+  const txt=[S.arrows.length,...counts()].join('\n');
+  try{ await navigator.clipboard.writeText(txt); $('copyOk').textContent='Copiado! Cole na célula TOTAL ARROWS do novo bloco.'; }
+  catch(e){ $('copyOk').textContent='Não consegui copiar automaticamente — selecione o texto acima e copie manualmente.'; }
+  setTimeout(()=>$('copyOk').textContent='',6000);
+};
+$('btnJson').onclick=()=>{
+  const data={date:S.date,arrowDiameterMm:S.diam,targetFaceMm:400,total:S.arrows.length,counts:counts(),
+    shots:S.arrows.map(a=>({round:a.round,cat:a.cat,label:CATS[a.cat],xMm:a.x,yMm:a.y}))};
+  const b=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  const u=URL.createObjectURL(b), l=document.createElement('a');
+  l.href=u; l.download=`sessao-${S.date}.json`; l.click(); URL.revokeObjectURL(u);
+};
+
+restore();
+$('cfgDate').value=S.date; $('cfgPer').value=S.per; $('cfgDiam').value=S.diam;
+render();
+</script>
+</body>
+</html>
