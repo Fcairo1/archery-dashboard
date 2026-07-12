@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archery Accuracy — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.0/dist/chart.umd.js" integrity="sha384-iU8HYtnGQ8Cy4zl7gbNMOhsDTTKX02BTXptVP/vqAWIaTfM7isw76iyZCsjL2eVi" crossorigin="anonymous"></script>
+<style>
+:root { color-scheme: light;
+  --bg:#f8fafc; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+  --accent:#b45309; --gold:#f59e0b; --good:#16a34a; --bad:#dc2626;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding:16px}
+h1{font-size:19px;margin:0 0 2px}
+h2{font-size:14px;margin:0 0 10px;color:var(--ink)}
+.sub{color:var(--muted);font-size:12px;margin-bottom:14px}
+.banner{background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;display:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:5px 12px;font-size:12px;cursor:pointer;color:var(--muted)}
+.chip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em}
+.kpi .v{font-size:20px;font-weight:700;margin-top:2px}
+.kpi .d{font-size:11px;margin-top:2px}
+.up{color:var(--good)} .down{color:var(--bad)} .flat{color:var(--muted)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:14px}
+.chartbox{position:relative}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:640px){.grid2{grid-template-columns:1fr}}
+select{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;background:#fff;max-width:100%}
+.detail-kpis{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0}
+.detail-kpis div{font-size:12px;color:var(--muted)} .detail-kpis b{font-size:15px;color:var(--ink);display:block}
+.note{background:#f1f5f9;border-left:3px solid var(--gold);border-radius:6px;padding:8px 10px;font-size:12px;margin-top:8px;white-space:pre-wrap}
+.mstone{display:flex;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:12.5px}
+.mstone:last-child{border-bottom:none}
+.mstone .dt{color:var(--muted);min-width:78px;font-variant-numeric:tabular-nums}
+.warn{color:#b45309;font-size:11.5px;margin-top:6px}
+.legend-note{font-size:11px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<h1 style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">🏹 Archery Accuracy
+  <button class="chip" style="font-size:12px" onclick="location.reload()">↻ Atualizar</button>
+</h1>
+<div class="sub" id="sub">Carregando dados da planilha…</div>
+<div class="banner" id="banner"></div>
+<div class="chips" id="chips"></div>
+<div class="kpis" id="kpis"></div>
+
+<div class="card">
+  <h2>Evolução da pontuação <span style="font-weight:400;color:var(--muted)">(média por flecha, 0–11 · linhas verticais = marcos)</span></h2>
+  <div class="chartbox" style="height:300px"><canvas id="chEvo"></canvas></div>
+  <div class="legend-note">Sessões antes de 25/04/2024 usam a pontuação normalizada da planilha (alvo antigo de 3 cores).</div>
+</div>
+
+<div class="card">
+  <h2>Onde as flechas acertaram <span style="font-weight:400;color:var(--muted)">(% por anel, cores do alvo)</span></h2>
+  <div class="chartbox" style="height:300px"><canvas id="chDist"></canvas></div>
+</div>
+
+<div class="grid2">
+  <div class="card">
+    <h2>Consistência <span style="font-weight:400;color:var(--muted)">(dispersão · menor = mais agrupado)</span></h2>
+    <div class="chartbox" style="height:190px"><canvas id="chSd"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Volume de treino <span style="font-weight:400;color:var(--muted)">(flechas por sessão)</span></h2>
+    <div class="chartbox" style="height:190px"><canvas id="chVol"></canvas></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">Detalhe da sessão <select id="selSession"></select></h2>
+  <div class="detail-kpis" id="dKpis"></div>
+  <div class="chartbox" style="height:240px"><canvas id="chSession"></canvas></div>
+  <div id="dWarn"></div>
+  <div id="dNotes"></div>
+</div>
+
+<div class="card">
+  <h2>Marcos</h2>
+  <div id="mstones"></div>
+</div>
+
+<script>
+// ===== constantes =====
+const FILE_ID = '1tN0zsr7ifZIVH4AyCm3XfcRSPDwlFzhzy2LpmefPzpU';
+// URLs tentadas em ordem. As duas primeiras funcionam se a planilha estiver
+// compartilhada como "qualquer pessoa com o link - leitor".
+// Se preferir "Publicar na web" (Arquivo > Compartilhar > Publicar na web > CSV),
+// cole a URL gerada em PUBLISHED_URL.
+const PUBLISHED_URL = '';
+const SHEET_URLS = [
+  PUBLISHED_URL,
+  `https://docs.google.com/spreadsheets/d/${FILE_ID}/gviz/tq?tqx=out:csv&gid=0`,
+  `https://docs.google.com/spreadsheets/d/${FILE_ID}/export?format=csv&gid=0`
+].filter(Boolean);
+const CATS = ['Fora','Branco ext.','Branco int.','Preto ext.','Preto int.','Azul ext.','Azul int.','Vermelho ext.','Vermelho int.','Amarelo ext.','Amarelo int.','Centro (X)'];
+const RING_COLORS = ['#94a3b8','#f1f5f9','#e2e8f0','#334155','#0f172a','#60a5fa','#2563eb','#f87171','#dc2626','#fde047','#facc15','#f59e0b'];
+const RING_BORDERS = ['#64748b','#cbd5e1','#94a3b8','#334155','#0f172a','#3b82f6','#1d4ed8','#ef4444','#b91c1c','#eab308','#ca8a04','#d97706'];
+const ERAS = [
+  {id:'10m', label:'10 m · alvo 3 cores', from:'0000',       to:'2024-03-14'},
+  {id:'14m', label:'14 m · alvo 3 cores', from:'2024-03-14', to:'2024-04-25'},
+  {id:'18m', label:'18 m · alvo oficial', from:'2024-04-25', to:'9999'}
+];
+// filtro extra: só a fase recurvo olímpico (estabilizador+mira), dentro dos 18 m
+const EXTRA_FILTERS = [{id:'18o', label:'18 m · recurvo olímpico (desde 08/24)', test:s=>s.era==='18m'&&s.iso>='2024-08-01'}];
+const MILESTONES = [
+  ['2024-03-14','Distância: 10 m → 14 m'],
+  ['2024-04-06','Regra oficial da linha (flecha na linha vale o aro maior)'],
+  ['2024-04-20','Arco novo'],
+  ['2024-04-25','18 m + alvo oficial de 40 cm (5 cores)'],
+  ['2024-05-31','Primeira sessão sem nenhum erro a 18 m'],
+  ['2024-08-01','Estabilizador + mira · categoria Recurvo Olímpico (julho: só treino de postura)'],
+  ['2024-11-30','Começou a usar o clicker']
+];
+const FALLBACK = [["2024-01-20",90,[2,0,0,0,0,3,5,25,28,20,5,2],6.0389],["2024-01-27",117,[4,0,0,0,0,0,7,26,29,36,12,3],6.2372],["2024-02-03",100,[2,0,0,0,0,2,8,20,28,32,7,1],6.4775],["2024-02-10",101,[1,0,0,0,0,1,8,22,32,27,8,2],6.3787],["2024-02-17",80,[0,0,0,0,0,3,2,8,21,33,10,4],6.9531],["2024-02-24",90,[0,0,0,0,0,1,8,9,22,33,13,4],6.5917],["2024-03-02",84,[1,0,0,0,0,0,0,16,24,23,16,4],6.369],["2024-03-10",85,[0,0,0,0,0,4,6,15,18,27,13,2],6.2647],["2024-03-14",100,[9,0,0,0,0,9,14,26,25,15,2,0],5.0525],["2024-03-16",84,[12,0,0,0,0,4,8,27,17,12,3,1],4.6726],["2024-03-21",90,[10,0,0,0,0,12,15,27,16,9,1,0],4.325],["2024-03-23",110,[8,0,0,0,0,9,14,22,28,21,5,4],5.2955],["2024-03-30",120,[3,0,0,0,0,8,18,28,31,25,4,3],5.5708],["2024-04-06",120,[4,0,0,0,0,10,12,25,28,26,15,0],5.6958],["2024-04-13",124,[12,0,0,0,0,13,22,32,21,16,6,2],4.4899],["2024-04-18",85,[12,0,0,0,0,7,8,12,22,17,5,2],5.1647],["2024-04-20",54,[3,0,0,0,0,5,10,14,9,10,2,1],4.912],["2024-04-25",55,[3,3,4,4,4,7,10,12,3,2,2,1],5.2909],["2024-04-27",60,[2,3,1,2,4,11,10,13,8,5,1,0],5.8667],["2024-05-02",45,[5,1,7,7,6,8,10,2,4,3,1,1],5.6444],["2024-05-04",55,[7,4,4,4,4,11,7,11,1,2,0,0],4.3636],["2024-05-09",55,[5,3,3,4,5,9,9,3,6,5,3,0],5.1636],["2024-05-15",60,[4,4,3,6,9,11,7,3,4,4,3,2],5.0333],["2024-05-18",69,[6,4,2,4,10,14,8,9,7,3,2,0],4.9855],["2024-05-23",65,[3,4,4,10,5,6,9,9,11,4,0,0],5.1231],["2024-05-26",65,[2,4,0,5,4,9,10,9,9,9,3,1],6.1077],["2024-05-31",71,[0,1,4,6,6,8,12,10,9,12,2,1],6.2535],["2024-06-01",80,[3,5,2,4,10,7,12,8,12,14,2,1],5.9625],["2024-06-07",70,[1,1,3,3,10,16,11,9,6,8,0,2],5.8143],["2024-06-08",80,[1,4,8,4,10,11,10,10,11,9,2,0],5.575],["2024-06-13",63,[2,0,2,9,6,6,10,12,6,5,3,1],5.7619],["2024-06-15",80,[1,2,2,4,13,8,13,4,13,14,4,2],6.35],["2024-06-21",61,[0,2,0,4,7,6,9,16,9,5,1,2],6.3443],["2024-06-22",73,[0,2,3,3,13,6,9,14,13,8,2,0],6.1233],["2024-06-27",65,[0,0,0,5,5,7,12,16,10,5,4,1],6.6154],["2024-06-29",80,[1,4,5,4,7,9,9,9,15,13,1,3],6.2],["2024-07-04",60,[0,4,2,5,4,5,11,7,8,8,5,1],6.2667],["2024-08-01",45,[3,1,4,9,1,7,7,2,4,6,0,2],5.3111],["2024-08-03",55,[1,1,5,5,9,6,6,12,6,3,0,2],5.6182],["2024-08-10",90,[0,1,2,5,9,12,11,14,18,12,6,0],6.5778],["2024-08-17",100,[3,3,4,11,4,9,18,20,8,15,2,3],6.05],["2024-08-24",115,[3,0,1,7,12,19,15,17,24,12,3,2],6.3217],["2024-09-07",87,[2,6,3,4,4,8,13,12,10,15,8,2],6.4253],["2024-09-14",86,[1,1,0,8,5,11,16,11,11,15,5,2],6.6047],["2024-09-21",100,[2,2,5,7,7,12,13,18,19,11,2,2],6.18],["2024-10-12",122,[1,1,3,5,8,10,13,22,19,22,10,8],7.1639],["2024-10-26",87,[1,1,5,5,12,13,11,12,9,13,5,0],6.069],["2024-11-09",55,[3,3,4,4,4,11,15,3,2,3,2,1],5.0727],["2024-11-16",74,[1,4,5,6,6,9,11,9,16,4,1,2],5.7568],["2024-11-23",100,[3,2,5,7,8,15,19,13,12,10,4,2],5.93],["2024-11-30",92,[2,4,1,7,4,9,18,19,18,7,1,2],6.1739],["2024-12-14",85,[2,0,3,5,4,12,15,16,15,7,6,0],6.3765],["2024-12-21",107,[4,4,9,4,8,19,12,17,13,12,5,0],5.7383],["2025-01-11",60,[2,2,5,1,6,7,8,14,7,4,2,2],5.9],["2025-01-18",43,[2,1,2,0,2,9,3,9,8,4,2,1],6.2791],["2025-01-25",31,[4,3,3,3,1,2,4,5,4,1,0,1],4.6129],["2025-02-15",60,[2,2,2,1,2,5,10,9,17,6,4,0],6.5833],["2025-02-22",55,[2,4,5,5,6,6,6,7,6,5,2,1],5.3091],["2025-03-01",64,[3,3,4,4,5,7,13,9,10,4,0,2],5.5781],["2025-03-08",76,[2,8,11,5,7,12,14,7,4,4,0,1],4.5395],["2025-03-29",81,[1,2,5,2,8,9,13,19,9,14,4,0],6.716],["2025-04-05",108,[1,6,7,7,10,18,14,17,11,11,5,1],5.7593],["2025-04-12",105,[1,2,10,5,8,11,12,17,15,7,14,3],6.3905],["2025-04-19",73,[3,3,2,2,5,9,11,12,16,8,1,1],6.1507],["2025-04-26",87,[1,0,2,2,7,16,15,16,17,8,1,2],6.4368],["2025-05-03",109,[2,7,9,8,8,14,13,11,19,15,2,1],5.7248],["2025-05-10",84,[2,7,5,3,6,6,12,14,17,7,2,3],5.9762],["2025-05-17",74,[0,0,5,7,6,8,8,11,10,15,3,1],6.4324],["2025-05-24",85,[1,0,7,3,2,16,16,14,12,8,5,1],6.2824],["2025-05-31",106,[1,3,4,8,7,16,15,22,12,14,4,0],6.1226],["2025-06-14",84,[2,3,2,7,3,11,11,13,16,13,0,3],6.3095],["2025-06-28",90,[1,0,3,4,6,10,13,16,21,9,3,4],6.7222],["2025-07-05",86,[3,2,5,6,7,9,19,4,5,13,3,0],5.0233],["2025-07-12",50,[1,3,3,5,3,4,12,6,5,5,3,0],5.7],["2025-07-26",76,[1,2,3,5,3,10,11,12,15,10,4,0],6.3816],["2025-08-09",96,[3,3,6,15,5,11,12,8,14,11,7,1],5.7812],["2025-08-16",103,[1,3,7,5,3,16,16,18,16,13,3,2],6.2427]];
+
+// ===== parse CSV =====
+function parseCSV(text){
+  const rows=[]; let row=[], field='', inQ=false;
+  for(let i=0;i<text.length;i++){
+    const ch=text[i];
+    if(inQ){
+      if(ch==='"'){ if(text[i+1]==='"'){field+='"';i++;} else inQ=false; }
+      else field+=ch;
+    } else {
+      if(ch==='"') inQ=true;
+      else if(ch===','){row.push(field);field='';}
+      else if(ch==='\n'){row.push(field);rows.push(row);row=[];field='';}
+      else if(ch!=='\r') field+=ch;
+    }
+  }
+  if(field!==''||row.length){row.push(field);rows.push(row);}
+  return rows;
+}
+function parseNum(s){
+  if(s==null) return null; s=String(s).trim(); if(!s) return null;
+  const t=s.includes(',')?s.replace(/\./g,'').replace(',','.'):s;
+  const v=parseFloat(t); return isNaN(v)?null:v;
+}
+function extractSessions(csvText){
+  const rows=parseCSV(csvText);
+  const dates=rows[1]||[], totals=rows[2]||[], avgR=rows[15]||[];
+  const ncols=Math.max(...rows.map(r=>r.length));
+  const raw=[];
+  for(let c=2;c<ncols;c++){
+    const d=(dates[c]||'').trim(), t=parseNum(totals[c]);
+    if(/^\d{2}\/\d{2}$/.test(d)&&t){
+      const counts=[]; for(let i=0;i<12;i++) counts.push(Math.round(parseNum((rows[3+i]||[])[c])||0));
+      raw.push({d,total:Math.round(t),counts,avg:parseNum(avgR[c]),col:c});
+    }
+  }
+  // inferir anos a partir de 2024
+  let year=2024, prev=null;
+  for(const s of raw){
+    const [dd,mm]=s.d.split('/').map(Number);
+    const key=mm*100+dd;
+    if(prev!==null&&key<prev) year++;
+    prev=key;
+    s.iso=`${year}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+  }
+  // notas (linhas 16,17,21,22) → sessão mais próxima à esquerda
+  const noteRows=[16,17,21,22];
+  for(const s of raw) s.notes=[];
+  for(const nr of noteRows){
+    const r=rows[nr]||[];
+    for(let c=2;c<ncols;c++){
+      const v=(r[c]||'').trim();
+      if(v&&!/^[\d,\.\s%]+$/.test(v)){
+        let owner=null;
+        for(const s of raw){ if(s.col<=c) owner=s; else break; }
+        if(owner&&!owner.notes.includes(v)) owner.notes.push(v);
+      }
+    }
+  }
+  return raw.map(({d,col,...rest})=>rest);
+}
+
+// ===== métricas =====
+function enrich(s){
+  const n=s.counts.reduce((a,b)=>a+b,0)||1;
+  const mean=s.counts.reduce((a,c,i)=>a+c*i,0)/n;
+  const sd=Math.sqrt(s.counts.reduce((a,c,i)=>a+c*(i-mean)*(i-mean),0)/n);
+  const gold=(s.counts[9]+s.counts[10]+s.counts[11])/n;
+  const miss=s.counts[0]/n;
+  const era=ERAS.find(e=>s.iso>=e.from&&s.iso<e.to);
+  return {...s,n,sum:n,score:s.avg??mean,rawMean:mean,sd,gold,miss,era:era?era.id:null,
+    mismatch:s.total!==s.counts.reduce((a,b)=>a+b,0)};
+}
+const fmt=(v,d=2)=>v==null?'—':v.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d});
+const pct=v=>v==null?'—':(v*100).toLocaleString('pt-BR',{maximumFractionDigits:1})+'%';
+const dBR=iso=>{const[y,m,d]=iso.split('-');return `${d}/${m}/${y.slice(2)}`;};
+function delta(cur,prevV,inverted){
+  if(prevV==null||cur==null) return '';
+  const df=cur-prevV; if(Math.abs(df)<1e-9) return '<span class="flat">—</span>';
+  const good=inverted?df<0:df>0;
+  return `<span class="${good?'up':'down'}">${df>0?'↑':'↓'} ${fmt(Math.abs(df))}</span>`;
+}
+
+// ===== estado / UI =====
+let ALL=[], VIEW=[], charts={};
+const $=id=>document.getElementById(id);
+
+function setFilter(f){
+  localStorage.setItem('arrowdash_era',f);
+  const xf=EXTRA_FILTERS.find(x=>x.id===f);
+  VIEW = f==='all'?ALL : xf?ALL.filter(xf.test) : ALL.filter(s=>s.era===f);
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.f===f));
+  render();
+}
+
+function buildChips(){
+  const box=$('chips'); box.innerHTML='';
+  const opts=[{id:'all',label:'Tudo'},...ERAS.map(e=>({id:e.id,label:e.label})),...EXTRA_FILTERS.map(x=>({id:x.id,label:x.label}))];
+  for(const o of opts){
+    const el=document.createElement('button');
+    el.className='chip'; el.dataset.f=o.id; el.textContent=o.label;
+    el.onclick=()=>setFilter(o.id);
+    box.appendChild(el);
+  }
+}
+
+function kpis(){
+  const last=VIEW[VIEW.length-1], prev=VIEW[VIEW.length-2];
+  const arrows=VIEW.reduce((a,s)=>a+s.n,0);
+  const best=VIEW.reduce((a,s)=>s.score>(a?.score??-1)?s:a,null);
+  const r5=VIEW.slice(-5), roll=r5.length?r5.reduce((a,s)=>a+s.score,0)/r5.length:null;
+  $('kpis').innerHTML=`
+  <div class="kpi"><div class="l">Sessões</div><div class="v">${VIEW.length}</div></div>
+  <div class="kpi"><div class="l">Flechas</div><div class="v">${arrows.toLocaleString('pt-BR')}</div></div>
+  <div class="kpi"><div class="l">Última pontuação</div><div class="v">${fmt(last?.score)}</div><div class="d">${last?dBR(last.iso):''} ${delta(last?.score,prev?.score)}</div></div>
+  <div class="kpi"><div class="l">Média (5 últimas)</div><div class="v">${fmt(roll)}</div></div>
+  <div class="kpi"><div class="l">Recorde</div><div class="v">${fmt(best?.score)}</div><div class="d">${best?dBR(best.iso):''}</div></div>
+  <div class="kpi"><div class="l">Ouro na última</div><div class="v">${pct(last?.gold)}</div><div class="d">amarelo + centro</div></div>`;
+}
+
+const msPlugin={
+  id:'milestones',
+  afterDatasetsDraw(chart){
+    const idxs=chart.$ms||[]; const {ctx,chartArea,scales}=chart;
+    ctx.save();
+    for(const [i,label] of idxs){
+      const x=scales.x.getPixelForValue(i);
+      if(x<chartArea.left-1||x>chartArea.right+1) continue;
+      ctx.strokeStyle='rgba(180,83,9,.45)'; ctx.setLineDash([4,4]); ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x,chartArea.top); ctx.lineTo(x,chartArea.bottom); ctx.stroke();
+    }
+    ctx.restore();
+  }
+};
+
+function mkChart(id,cfg){ if(charts[id])charts[id].destroy(); charts[id]=new Chart($(id),cfg); return charts[id]; }
+
+function render(){
+  kpis();
+  const labels=VIEW.map(s=>dBR(s.iso));
+  // rolling 5
+  const roll=VIEW.map((_,i)=>{const w=VIEW.slice(Math.max(0,i-4),i+1);return w.reduce((a,s)=>a+s.score,0)/w.length;});
+  const msIdx=[];
+  for(const [d,l] of MILESTONES){
+    const i=VIEW.findIndex(s=>s.iso>=d);
+    if(i>0) msIdx.push([i,l]);
+  }
+  const evo=mkChart('chEvo',{type:'line',
+    data:{labels,datasets:[
+      {label:'Pontuação',data:VIEW.map(s=>s.score),borderColor:'#b45309',backgroundColor:'#b45309',pointRadius:2.5,pointHoverRadius:5,tension:.25},
+      {label:'Média móvel (5)',data:roll,borderColor:'rgba(15,23,42,.45)',borderDash:[6,4],pointRadius:0,tension:.35}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},
+      plugins:{legend:{labels:{boxWidth:12,font:{size:11}}},
+        tooltip:{callbacks:{afterTitle:items=>{
+          const s=VIEW[items[0].dataIndex];
+          const ms=MILESTONES.filter(([d])=>{const i=VIEW.findIndex(x=>x.iso>=d);return i===items[0].dataIndex;}).map(([,l])=>'📍 '+l);
+          return [`${s.n} flechas · ouro ${(s.gold*100).toFixed(0)}%`,...ms];
+        }}}},
+      scales:{y:{suggestedMin:4,suggestedMax:8,ticks:{font:{size:11}}},x:{ticks:{font:{size:10},maxTicksLimit:14}}}},
+    plugins:[msPlugin]});
+  evo.$ms=msIdx; evo.update();
+
+  // distribuição empilhada 100% — ouro embaixo
+  const order=[11,10,9,8,7,6,5,4,3,2,1,0];
+  mkChart('chDist',{type:'bar',
+    data:{labels,datasets:order.map(i=>({label:CATS[i],data:VIEW.map(s=>s.counts[i]/s.n*100),
+      backgroundColor:RING_COLORS[i],borderColor:RING_BORDERS[i],borderWidth:i===1||i===2?1:0,stack:'a'}))},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:10,font:{size:10}}},
+        tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}},
+      scales:{x:{stacked:true,ticks:{font:{size:10},maxTicksLimit:14}},
+        y:{stacked:true,max:100,ticks:{callback:v=>v+'%',font:{size:11}}}}}});
+
+  mkChart('chSd',{type:'line',
+    data:{labels,datasets:[{label:'Desvio-padrão (anéis)',data:VIEW.map(s=>s.sd),borderColor:'#0284c7',pointRadius:2,tension:.3}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{ticks:{font:{size:10}}},x:{ticks:{font:{size:9},maxTicksLimit:8}}}}});
+
+  mkChart('chVol',{type:'bar',
+    data:{labels,datasets:[{label:'Flechas',data:VIEW.map(s=>s.n),backgroundColor:'rgba(180,83,9,.55)'}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{ticks:{font:{size:10}}},x:{ticks:{font:{size:9},maxTicksLimit:8}}}}});
+
+  // seletor de sessão
+  const sel=$('selSession'); sel.innerHTML='';
+  VIEW.forEach((s,i)=>{const o=document.createElement('option');o.value=i;o.textContent=dBR(s.iso);sel.appendChild(o);});
+  sel.value=VIEW.length-1;
+  sel.onchange=()=>sessionDetail(+sel.value);
+  if(VIEW.length)sessionDetail(VIEW.length-1);
+}
+
+function sessionDetail(i){
+  const s=VIEW[i], prev=VIEW[i-1];
+  $('dKpis').innerHTML=`
+    <div>Flechas<b>${s.n}</b></div>
+    <div>Pontuação<b>${fmt(s.score)} ${delta(s.score,prev?.score)}</b></div>
+    <div>Ouro (9–X)<b>${pct(s.gold)} ${delta(s.gold,prev?.gold)}</b></div>
+    <div>Erros (fora)<b>${pct(s.miss)} ${delta(s.miss,prev?.miss,true)}</b></div>
+    <div>Dispersão<b>${fmt(s.sd)} ${delta(s.sd,prev?.sd,true)}</b></div>`;
+  mkChart('chSession',{type:'bar',
+    data:{labels:CATS,datasets:[
+      {label:dBR(s.iso),data:s.counts.map(c=>c/s.n*100),backgroundColor:RING_COLORS,borderColor:RING_BORDERS,borderWidth:1},
+      ...(prev?[{label:'Anterior ('+dBR(prev.iso)+')',type:'line',data:prev.counts.map(c=>c/prev.n*100),borderColor:'rgba(15,23,42,.4)',borderDash:[5,4],pointRadius:2,tension:.2}]:[])
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:10,font:{size:10}}},tooltip:{callbacks:{label:c=>`${c.dataset.label}: ${c.parsed.y.toFixed(1)}%`}}},
+      scales:{y:{ticks:{callback:v=>v+'%',font:{size:10}}},x:{ticks:{font:{size:9}}}}}});
+  $('dWarn').innerHTML=s.mismatch?`<div class="warn">⚠️ A soma dos anéis (${s.n}) difere do total anotado (${s.total}) na planilha — usei a soma dos anéis.</div>`:'';
+  $('dNotes').innerHTML=(s.notes||[]).map(n=>`<div class="note">${n.replace(/</g,'&lt;')}</div>`).join('');
+}
+
+function renderMilestones(){
+  $('mstones').innerHTML=MILESTONES.map(([d,l])=>`<div class="mstone"><span class="dt">${dBR(d)}</span><span>${l}</span></div>`).join('');
+}
+
+// ===== carga =====
+async function fetchSessions(){
+  let lastErr;
+  for(const url of SHEET_URLS){
+    try{
+      const resp=await fetch(url,{redirect:'follow'});
+      if(!resp.ok) throw new Error('HTTP '+resp.status);
+      const csv=await resp.text();
+      if(csv.trim().startsWith('<')) throw new Error('nao e CSV (planilha nao publica?)');
+      const sess=extractSessions(csv);
+      if(sess.length<10) throw new Error('parse curto');
+      return sess;
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr||new Error('sem URL');
+}
+async function load(){
+  let live=false;
+  try{
+    ALL=(await fetchSessions()).map(enrich); live=true;
+  }catch(e){
+    ALL=FALLBACK.map(([iso,total,counts,avg])=>enrich({iso,total,counts,avg,notes:[]}));
+    $('banner').style.display='block';
+    $('banner').textContent='Não consegui ler a planilha ao vivo agora ('+e.message+') — mostrando os dados salvos até 16/08/2025. Recarregue para tentar de novo.';
+  }
+  const last=ALL[ALL.length-1];
+  $('sub').textContent=`${ALL.length} sessões · ${ALL.reduce((a,s)=>a+s.n,0).toLocaleString('pt-BR')} flechas · última em ${dBR(last.iso)}${live?' · dados ao vivo da planilha':''}`;
+  buildChips(); renderMilestones();
+  const saved=localStorage.getItem('arrowdash_era')||'all';
+  setFilter(['all',...ERAS.map(e=>e.id),...EXTRA_FILTERS.map(x=>x.id)].includes(saved)?saved:'all');
+}
+load();
+</script>
+</body>
+</html>
