@@ -16,19 +16,21 @@ h1{font-size:18px;margin:0 0 2px;display:flex;gap:10px;align-items:center;flex-w
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:12px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:end}
 label{font-size:11px;color:var(--muted);display:block;margin-bottom:2px;text-transform:uppercase;letter-spacing:.03em}
-input,select{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:14px;background:#fff}
+input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:14px;background:#fff;font-family:inherit}
 input[type=number]{width:74px} input[type=date]{width:150px}
-button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 13px;font-size:13px;cursor:pointer;color:var(--ink)}
+textarea{width:100%;resize:vertical;min-height:52px}
+button{border:1px solid var(--line);background:#fff;border-radius:9px;padding:9px 14px;font-size:13px;cursor:pointer;color:var(--ink);min-height:38px}
 button.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+button.accent{background:var(--accent);color:#fff;border-color:var(--accent)}
 button.warn{color:var(--bad);border-color:#fecaca}
 button:disabled{opacity:.4;cursor:default}
-.status{font-size:14px;font-weight:700;margin:8px 0 6px}
-.status small{font-weight:400;color:var(--muted)}
+.status{font-size:15px;font-weight:700;margin:8px 0 6px;line-height:1.5}
 .toolbar{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
-.toolbar button{font-size:12px;padding:6px 10px}
+.toolbar button{font-size:12.5px;padding:8px 12px}
 #alvoWrap{position:relative;user-select:none;-webkit-user-select:none}
 svg{width:100%;height:auto;display:block;border-radius:10px;background:#eef2f7;touch-action:none}
 .hint{background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:7px 10px;font-size:12.5px;margin:8px 0}
+.toast{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46;border-radius:8px;padding:7px 10px;font-size:12.5px;margin:8px 0;display:none}
 table{border-collapse:collapse;width:100%;font-size:12.5px}
 td,th{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
 td:last-child,th:last-child{text-align:right}
@@ -36,15 +38,37 @@ td:last-child,th:last-child{text-align:right}
 .big{font-size:19px;font-weight:700}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(max-width:560px){.grid2{grid-template-columns:1fr}}
-.nudge{display:grid;grid-template-columns:repeat(3,40px);gap:4px;justify-content:center}
-.nudge button{padding:7px 0;font-size:14px}
+.nudge{display:grid;grid-template-columns:repeat(3,44px);gap:4px;justify-content:center}
+.nudge button{padding:9px 0;font-size:15px;min-height:40px}
 .copybox{background:#f1f5f9;border-radius:8px;padding:8px 10px;font-family:ui-monospace,Menlo,monospace;font-size:12px;white-space:pre;max-height:150px;overflow:auto}
 a{color:var(--accent)}
 .ok{color:var(--good);font-size:12px}
+.err{color:var(--bad);font-size:12.5px}
+.rounds{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin:8px 0}
+.rchip{border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px;font-size:12px;text-align:center;line-height:1.25;cursor:pointer;min-width:44px}
+.rchip small{color:var(--muted);font-size:10.5px}
+.rchip.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.rchip.on small{color:#cbd5e1}
+.rchip.add{color:var(--accent);border-color:var(--accent);border-style:dashed}
+.navbtns{display:flex;gap:6px;margin:8px 0}
+.navbtns button{flex:1}
+.toggle-row{display:flex;align-items:center;gap:7px;font-size:12.5px;margin:6px 0;color:var(--muted)}
+.toggle-row input{width:auto}
+.gear{background:none;border:none;font-size:18px;padding:2px 4px;min-height:auto;cursor:pointer}
+.modalOverlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modalOverlay.on{display:flex}
+.modal{background:#fff;border-radius:14px;padding:18px;max-width:420px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,.25)}
+.modal h3{margin:0 0 10px;font-size:15px}
+.modal p{font-size:12.5px;color:var(--muted);margin:6px 0}
+.modal .toolbar{margin-top:14px;justify-content:flex-end}
+.tokstat{font-size:12px;margin:6px 0}
+.tokstat.set{color:var(--good)} .tokstat.unset{color:var(--muted)}
 </style>
 </head>
 <body>
-<h1>📝 Registrar sessão <a href="index.html" style="font-size:12px;font-weight:400">← voltar ao dashboard</a></h1>
+<h1>📝 Registrar sessão <a href="index.html" style="font-size:12px;font-weight:400">← voltar ao dashboard</a>
+  <button class="gear" id="btnGear" title="Configurar token do GitHub">⚙️</button>
+</h1>
 <div class="sub">Clique no alvo onde cada flecha acertou. Anel calculado automaticamente (regra oficial da linha incluída).</div>
 
 <div class="card">
@@ -65,11 +89,20 @@ a{color:var(--accent)}
 
 <div class="card">
   <div class="status" id="status"></div>
+  <div class="toast" id="toast"></div>
   <div id="alvoWrap"><svg id="alvo" viewBox="-220 -220 440 440" xmlns="http://www.w3.org/2000/svg"></svg></div>
+
+  <div class="rounds" id="roundChips"></div>
+  <div class="navbtns">
+    <button id="btnPrevRound">‹ Rodada anterior</button>
+    <button id="btnNextRound" class="primary">Próxima rodada ›</button>
+  </div>
+  <label class="toggle-row"><input type="checkbox" id="cfgAutoAdvance"> avançar automaticamente ao completar a rodada</label>
+  <label class="toggle-row"><input type="checkbox" id="cfgShowAll"> ver todas as flechas da sessão</label>
+
   <div class="toolbar">
     <button id="btnMiss">Fora do alvo (erro)</button>
     <button id="btnPlus1">＋1 nesta rodada</button>
-    <button id="btnClose">Fechar rodada agora</button>
     <button id="btnUndo">↩ Desfazer última</button>
     <button id="btnZoom">🔍 Zoom</button>
   </div>
@@ -96,17 +129,61 @@ a{color:var(--accent)}
 </div>
 
 <div class="card">
-  <h3 style="margin:0 0 8px;font-size:14px">Enviar para a planilha</h3>
+  <label>Notas da sessão (opcional)</label>
+  <textarea id="notesInput" placeholder="Ex.: mudança de distância, equipamento, sensações do dia…"></textarea>
+</div>
+
+<div class="card">
+  <h3 style="margin:0 0 8px;font-size:14px">Salvar sessão</h3>
   <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">
-    Copie e cole na célula <b>TOTAL ARROWS</b> do novo bloco da aba Tabelas — o total e as 12 contagens entram de uma vez, na ordem certa das linhas.
+    Salva a sessão automaticamente em <code>dados/sessoes.json</code> no repositório do dashboard.
+    O total e as contagens são recalculados a partir das flechas marcadas — nunca do que estiver digitado.
+  </div>
+  <div class="toolbar">
+    <button class="accent" id="btnSave">☁️ Salvar sessão no GitHub</button>
+  </div>
+  <div id="saveMsg" style="margin-top:6px"></div>
+  <hr style="border:none;border-top:1px solid var(--line);margin:12px 0">
+  <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">
+    Rede de segurança: mesmo com o salvamento automático, mantenha sempre uma cópia local.
   </div>
   <div class="copybox" id="copyPreview"></div>
   <div class="toolbar">
-    <button class="primary" id="btnCopy">📋 Copiar (total + contagens)</button>
+    <button id="btnCopy">📋 Copiar (total + contagens)</button>
     <button id="btnJson">⬇ Baixar sessão com coordenadas (JSON)</button>
     <button class="warn" id="btnClear">🗑 Limpar sessão</button>
   </div>
   <span class="ok" id="copyOk"></span>
+</div>
+
+<div class="modalOverlay" id="gearModal">
+  <div class="modal">
+    <h3>⚙️ Token do GitHub</h3>
+    <p>Crie um <b>fine-grained personal access token</b> só para este repositório
+      (<code>Fcairo1/archery-dashboard</code>), com permissão <b>Contents: Read and write</b>.
+      O token fica guardado apenas neste navegador (localStorage) — nunca é enviado a nenhum outro lugar.</p>
+    <p><a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">Criar token no GitHub →</a></p>
+    <div id="tokStat" class="tokstat unset">Nenhum token configurado.</div>
+    <label>Colar token</label>
+    <input type="password" id="tokInput" placeholder="github_pat_..." style="width:100%">
+    <div class="toolbar">
+      <button class="warn" id="tokRemove">Remover token</button>
+      <button id="tokClose">Fechar</button>
+      <button class="primary" id="tokSave">Salvar token</button>
+    </div>
+  </div>
+</div>
+
+<div class="modalOverlay" id="dupModal">
+  <div class="modal">
+    <h3>Já existe uma sessão em <span id="dupDate"></span></h3>
+    <p>O que você quer fazer?</p>
+    <div class="toolbar" style="justify-content:flex-start;flex-direction:column;align-items:stretch">
+      <button class="primary" id="dupReplace">Substituir a sessão existente</button>
+      <button id="dupBoth">Manter as duas (adicionar mesmo assim)</button>
+      <button class="warn" id="dupCancel">Cancelar</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -114,6 +191,7 @@ a{color:var(--accent)}
 const CATS=['Fora','Branco ext.','Branco int.','Preto ext.','Preto int.','Azul ext.','Azul int.','Vermelho ext.','Vermelho int.','Amarelo ext.','Amarelo int.','Centro (X)'];
 const CAT_COLORS=['#a78bfa','#f8fafc','#e8edf3','#2b3442','#0f172a','#5db3e8','#2277c9','#ef6a5f','#d9302c','#ffe066','#ffce00','#ec4899'];
 const R_OUT=200, R_X=10, STEP=20; // mm no alvo de 40 cm
+const GH_OWNER='Fcairo1', GH_REPO='archery-dashboard', GH_PATH='dados/sessoes.json', GH_BRANCH='main';
 const $=id=>document.getElementById(id);
 
 // ---- classificação (regra da linha: borda interna do tubo) ----
@@ -125,17 +203,42 @@ function classify(x,y,arrowDiamMm){
 }
 
 // ---- estado ----
-let S={date:new Date().toISOString().slice(0,10),per:5,diam:6,arrows:[],round:1,limit:5,photo:null,cal:null};
-let sel=-1, zoom=false, calStep=null;
+let S={date:new Date().toISOString().slice(0,10),per:5,diam:6,arrows:[],roundLimits:{},activeRound:1,notes:'',photo:null,cal:null};
+let sel=-1, zoom=false, calStep=null, autoAdvance=true, showAll=false;
 
 function save(){ try{localStorage.setItem('arrowreg_session',JSON.stringify({...S,photo:null,cal:S.cal}));}catch(e){} }
 function restore(){
   try{
     const d=JSON.parse(localStorage.getItem('arrowreg_session')||'null');
     if(d&&d.arrows&&d.arrows.length&&confirm(`Continuar a sessão de ${d.date} com ${d.arrows.length} flechas já marcadas?`)){
-      S={...S,...d,photo:null};
+      S={...S,...d,photo:null,roundLimits:d.roundLimits||{},activeRound:d.activeRound||1,notes:d.notes||''};
     } else localStorage.removeItem('arrowreg_session');
   }catch(e){}
+  try{ const aa=localStorage.getItem('arrowreg_autoadvance'); autoAdvance = aa===null?true:aa==='1'; }catch(e){}
+}
+
+// ---- rodadas ----
+function roundCount(r){ return S.arrows.filter(a=>a.round===r).length; }
+function roundLimit(r){ return S.roundLimits[r]!=null?S.roundLimits[r]:S.per; }
+function maxRound(){ let m=S.activeRound; for(const a of S.arrows) if(a.round>m) m=a.round; return m; }
+function numberInRound(i){ const r=S.arrows[i].round; let n=0; for(let k=0;k<=i;k++) if(S.arrows[k].round===r) n++; return n; }
+function toast(msg,ms=2600){ const t=$('toast'); t.textContent=msg; t.style.display='block'; clearTimeout(toast._t); toast._t=setTimeout(()=>t.style.display='none',ms); }
+
+function nextRound(){
+  const mr=maxRound();
+  if(S.activeRound<mr){ S.activeRound++; sel=-1; render(); toast(`Rodada ${S.activeRound} selecionada.`); return; }
+  if(roundCount(S.activeRound)===0){ toast('Adicione ao menos 1 flecha nesta rodada antes de avançar.'); return; }
+  S.activeRound=mr+1; sel=-1; render(); toast(`Rodada ${S.activeRound} iniciada.`);
+}
+function prevRound(){ if(S.activeRound>1){ S.activeRound--; sel=-1; render(); } }
+function maybeAutoAdvance(){
+  if(!autoAdvance) return;
+  const n=roundCount(S.activeRound), lim=roundLimit(S.activeRound);
+  if(n<lim) return;
+  if(maxRound()!==S.activeRound) return; // não pula rodadas ao editar o passado
+  const before=S.activeRound;
+  S.activeRound=before+1;
+  toast(`Rodada ${before} concluída — avançando para a rodada ${S.activeRound}.`);
 }
 
 // ---- desenho do alvo ----
@@ -150,7 +253,6 @@ function drawTarget(){
       const s=R_OUT/S.cal.r;
       im.setAttribute('transform',`scale(${s}) translate(${-S.cal.cx},${-S.cal.cy})`);
     } else {
-      // sem calibração: mostra a foto inteira centrada
       im.setAttribute('transform','translate(-220,-220)');
       im.setAttribute('width',440); im.setAttribute('height',440);
       im.setAttribute('preserveAspectRatio','xMidYMid meet');
@@ -170,9 +272,12 @@ function drawTarget(){
   // marcadores
   S.arrows.forEach((a,i)=>{
     if(a.cat===0&&a.x==null) return;
-    const g=el('g',{'data-i':i,cursor:'pointer'});
+    const isActive=a.round===S.activeRound;
+    const dim=!isActive&&!showAll;
+    const g=el('g',{opacity:dim?0.28:1});
+    if(isActive){ g.setAttribute('data-i',i); g.setAttribute('cursor','pointer'); }
     g.appendChild(el('circle',{cx:a.x,cy:a.y,r:i===sel?5:3.5,fill:i===sel?'#0ea5e9':'#111827',stroke:'#fff','stroke-width':1.2}));
-    g.appendChild(el('text',{x:a.x,y:a.y+1.6,'text-anchor':'middle','font-size':4.5,fill:'#fff','font-weight':'700'})).textContent=a.round;
+    g.appendChild(el('text',{x:a.x,y:a.y+1.6,'text-anchor':'middle','font-size':4.5,fill:'#fff','font-weight':'700'})).textContent=numberInRound(i);
     svg.appendChild(g);
   });
   svg.setAttribute('viewBox', zoom?'-110 -110 220 220':'-220 -220 440 440');
@@ -191,32 +296,30 @@ $('alvo').addEventListener('pointerdown',ev=>{
   const p=svgPoint(ev);
   if(calStep==='center'){ S._c=p; calStep='edge'; setHint('Agora clique na <b>borda externa do alvo</b> (limite do branco de fora) na foto.'); return; }
   if(calStep==='edge'){
-    // converter: cliques foram em coords do viewBox com foto "crua" (translate -220)
     const cx=S._c.x+220, cy=S._c.y+220, ex=p.x+220, ey=p.y+220;
-    const rawScale=Math.min(440/S._imgW,440/S._imgH); // preserveAspectRatio meet
+    const rawScale=Math.min(440/S._imgW,440/S._imgH);
     const offX=(440-S._imgW*rawScale)/2, offY=(440-S._imgH*rawScale)/2;
     const icx=(cx-offX)/rawScale, icy=(cy-offY)/rawScale, iex=(ex-offX)/rawScale, iey=(ey-offY)/rawScale;
     S.cal={cx:icx,cy:icy,r:Math.hypot(iex-icx,iey-icy)};
     calStep=null; setHint('Calibrado! Agora clique nas flechas em cima da foto. Confira se os anéis rosa batem com o alvo; se não, recarregue a foto.');
     render(); return;
   }
-  if(Math.hypot(p.x,p.y)>R_OUT+18) return; // clique muito longe: ignora (usar botão Fora)
+  if(Math.hypot(p.x,p.y)>R_OUT+18) return;
   addArrow(p.x,p.y);
 });
 function addArrow(x,y){
-  const inRound=S.arrows.filter(a=>a.round===S.round).length;
-  if(inRound>=S.limit){ S.round++; S.limit=S.per; }
   const cat=(x==null)?0:classify(x,y,S.diam);
-  S.arrows.push({x,y,cat,round:S.round});
+  S.arrows.push({x,y,cat,round:S.activeRound});
   sel=S.arrows.length-1;
+  maybeAutoAdvance();
   render();
 }
 $('btnMiss').onclick=()=>addArrow(null,null);
-$('btnPlus1').onclick=()=>{S.limit++;render();};
-$('btnClose').onclick=()=>{ if(S.arrows.some(a=>a.round===S.round)){S.round++;S.limit=S.per;} render(); };
-$('btnUndo').onclick=()=>{ S.arrows.pop(); sel=S.arrows.length-1; fixRound(); render(); };
-$('btnDel').onclick=()=>{ if(sel>=0){S.arrows.splice(sel,1); sel=-1; fixRound(); render();} };
-function fixRound(){ S.round=S.arrows.length?Math.max(...S.arrows.map(a=>a.round)):1; if(!S.arrows.length)S.limit=S.per; }
+$('btnPlus1').onclick=()=>{ S.roundLimits[S.activeRound]=roundLimit(S.activeRound)+1; render(); };
+$('btnNextRound').onclick=nextRound;
+$('btnPrevRound').onclick=prevRound;
+$('btnUndo').onclick=()=>{ if(!S.arrows.length)return; const removed=S.arrows.pop(); sel=-1; S.activeRound=removed.round; render(); };
+$('btnDel').onclick=()=>{ if(sel>=0){S.arrows.splice(sel,1); sel=-1; render();} };
 document.querySelectorAll('.nudge button[data-n]').forEach(b=>b.onclick=()=>{
   if(sel<0||S.arrows[sel].x==null) return;
   const [dx,dy]=b.dataset.n.split(',').map(Number);
@@ -224,12 +327,15 @@ document.querySelectorAll('.nudge button[data-n]').forEach(b=>b.onclick=()=>{
   render();
 });
 $('btnZoom').onclick=()=>{zoom=!zoom;render();};
-$('btnClear').onclick=()=>{ if(confirm('Apagar todas as flechas desta sessão?')){S.arrows=[];S.round=1;S.limit=S.per;sel=-1;localStorage.removeItem('arrowreg_session');render();} };
+$('btnClear').onclick=()=>{ if(confirm('Apagar todas as flechas desta sessão?')){S.arrows=[];S.roundLimits={};S.activeRound=1;sel=-1;localStorage.removeItem('arrowreg_session');render();} };
+$('cfgAutoAdvance').onchange=e=>{ autoAdvance=e.target.checked; try{localStorage.setItem('arrowreg_autoadvance',autoAdvance?'1':'0');}catch(err){} };
+$('cfgShowAll').onchange=e=>{ showAll=e.target.checked; render(); };
+$('notesInput').oninput=e=>{ S.notes=e.target.value; save(); };
 
 // ---- config ----
 $('cfgDate').value=S.date;
 $('cfgDate').onchange=e=>{S.date=e.target.value;render();};
-$('cfgPer').onchange=e=>{S.per=Math.max(1,+e.target.value||5);S.limit=Math.max(S.limit,S.per);render();};
+$('cfgPer').onchange=e=>{S.per=Math.max(1,+e.target.value||5);render();};
 $('cfgDiam').onchange=e=>{S.diam=+e.target.value||6;S.arrows.forEach(a=>{if(a.x!=null)a.cat=classify(a.x,a.y,S.diam);});render();};
 $('cfgMode').onchange=e=>{
   const photo=e.target.value==='photo';
@@ -253,24 +359,43 @@ function setHint(h){ $('hint').style.display=h?'':'none'; $('hint').innerHTML=h;
 function counts(){ const c=Array(12).fill(0); S.arrows.forEach(a=>c[a.cat]++); return c; }
 function render(){
   drawTarget();
+  renderChips();
   const c=counts(), n=S.arrows.length;
-  const inRound=S.arrows.filter(a=>a.round===S.round).length;
-  $('status').innerHTML=`Rodada ${S.round} — flecha ${Math.min(inRound+1,S.limit)}/${S.limit} <small>· ${S.date.split('-').reverse().join('/')}</small>`;
+  const mr=maxRound(), cnt=roundCount(S.activeRound), lim=roundLimit(S.activeRound);
+  const dateFmt=S.date.split('-').reverse().join('/');
+  $('status').innerHTML=`Sessão ${dateFmt} · Rodada ${S.activeRound} de ${mr} · flecha ${cnt}/${lim} · ${n} flechas na sessão`;
+  $('btnPrevRound').disabled = S.activeRound<=1;
   const avg=n?S.arrows.reduce((s,a)=>s+a.cat,0)/n:null;
   $('tTotal').textContent=n;
   $('tAvg').textContent=avg==null?'—':avg.toLocaleString('pt-BR',{maximumFractionDigits:2});
   const hits=S.arrows.filter(a=>a.x!=null);
   if(hits.length>=3){
     const mx=hits.reduce((s,a)=>s+a.x,0)/hits.length, my=hits.reduce((s,a)=>s+a.y,0)/hits.length;
-    const mr=hits.reduce((s,a)=>s+Math.hypot(a.x,a.y),0)/hits.length;
-    $('tSpatial').innerHTML=`centroide: ${mx>1?'→':mx<-1?'←':''}${Math.abs(mx).toFixed(0)}mm, ${my>1?'↓':my<-1?'↑':''}${Math.abs(my).toFixed(0)}mm · dist. média ${mr.toFixed(0)}mm`;
+    const mr2=hits.reduce((s,a)=>s+Math.hypot(a.x,a.y),0)/hits.length;
+    $('tSpatial').innerHTML=`centroide: ${mx>1?'→':mx<-1?'←':''}${Math.abs(mx).toFixed(0)}mm, ${my>1?'↓':my<-1?'↑':''}${Math.abs(my).toFixed(0)}mm · dist. média ${mr2.toFixed(0)}mm`;
   } else $('tSpatial').textContent='';
   $('tally').innerHTML='<tr><th>Anel</th><th>Flechas</th></tr>'+CATS.map((l,i)=>
     `<tr><td><span class="sw" style="background:${CAT_COLORS[i]}"></span>${l}</td><td>${c[i]}</td></tr>`).join('');
   $('copyPreview').textContent=[n,...c].join('\n');
-  $('selInfo').innerHTML=sel>=0?(S.arrows[sel].x==null?`#${sel+1}: Fora (erro), rodada ${S.arrows[sel].round}`:
-    `#${sel+1}: <b>${CATS[S.arrows[sel].cat]}</b>, rodada ${S.arrows[sel].round} · ${Math.hypot(S.arrows[sel].x,S.arrows[sel].y).toFixed(0)}mm do centro`):'Nenhuma flecha selecionada.';
+  $('selInfo').innerHTML=sel>=0?(S.arrows[sel].x==null?`#${numberInRound(sel)}: Fora (erro), rodada ${S.arrows[sel].round}`:
+    `#${numberInRound(sel)}: <b>${CATS[S.arrows[sel].cat]}</b>, rodada ${S.arrows[sel].round} · ${Math.hypot(S.arrows[sel].x,S.arrows[sel].y).toFixed(0)}mm do centro`):'Nenhuma flecha selecionada.';
   save();
+}
+function renderChips(){
+  const box=$('roundChips'); box.innerHTML='';
+  const mr=maxRound();
+  for(let r=1;r<=mr;r++){
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='rchip'+(r===S.activeRound?' on':'');
+    b.innerHTML=`${r}<br><small>${roundCount(r)}/${roundLimit(r)}</small>`;
+    b.onclick=()=>{ S.activeRound=r; sel=-1; render(); };
+    box.appendChild(b);
+  }
+  const nb=document.createElement('button');
+  nb.type='button'; nb.className='rchip add'; nb.textContent='+ nova rodada';
+  nb.onclick=()=>{ S.activeRound=maxRound()+1; sel=-1; render(); toast(`Rodada ${S.activeRound} iniciada.`); };
+  box.appendChild(nb);
 }
 $('btnCopy').onclick=async()=>{
   const txt=[S.arrows.length,...counts()].join('\n');
@@ -278,16 +403,156 @@ $('btnCopy').onclick=async()=>{
   catch(e){ $('copyOk').textContent='Não consegui copiar automaticamente — selecione o texto acima e copie manualmente.'; }
   setTimeout(()=>$('copyOk').textContent='',6000);
 };
+function buildSessionPayload(){
+  const c=counts(), total=S.arrows.length;
+  const media=total?S.arrows.reduce((s,a)=>s+a.cat,0)/total:0;
+  const rodadas=[];
+  for(let r=1;r<=maxRound();r++){
+    const flechas=S.arrows.filter(a=>a.round===r).map(a=>({cat:a.cat,xMm:a.x,yMm:a.y}));
+    if(flechas.length) rodadas.push({numero:r,flechas});
+  }
+  return {data:S.date,distanciaM:18,alvoMm:400,diametroFlechaMm:S.diam,total,counts:c,media,
+    notas:($('notesInput').value||'').trim(),rodadas,origem:'registrar.html',criadoEm:new Date().toISOString()};
+}
 $('btnJson').onclick=()=>{
-  const data={date:S.date,arrowDiameterMm:S.diam,targetFaceMm:400,total:S.arrows.length,counts:counts(),
-    shots:S.arrows.map(a=>({round:a.round,cat:a.cat,label:CATS[a.cat],xMm:a.x,yMm:a.y}))};
+  const data=buildSessionPayload();
   const b=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
   const u=URL.createObjectURL(b), l=document.createElement('a');
   l.href=u; l.download=`sessao-${S.date}.json`; l.click(); URL.revokeObjectURL(u);
 };
 
+// ---- base64 seguro para acentos ----
+function b64EncodeUtf8(str){
+  const bytes=new TextEncoder().encode(str);
+  let bin=''; for(let i=0;i<bytes.length;i++) bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function b64DecodeUtf8(b64){
+  const bin=atob(b64.replace(/\s/g,''));
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) bytes[i]=bin.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
+}
+
+// ---- token / GitHub ----
+function getToken(){ try{return localStorage.getItem('arrowreg_gh_token')||'';}catch(e){return '';} }
+function ghHeaders(token){ return {Authorization:`Bearer ${token}`,Accept:'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28','Content-Type':'application/json'}; }
+async function ghError(resp){
+  let msg=`HTTP ${resp.status}`;
+  try{ const j=await resp.json(); if(j&&j.message) msg=j.message; }catch(e){}
+  return new Error(msg);
+}
+async function ghReadSessoes(token){
+  const url=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}?ref=${GH_BRANCH}`;
+  const resp=await fetch(url,{headers:ghHeaders(token)});
+  if(resp.status===404) return {json:{versao:1,atualizadoEm:'',sessoes:[]},sha:null};
+  if(!resp.ok) throw await ghError(resp);
+  const data=await resp.json();
+  const text=b64DecodeUtf8(data.content);
+  let json;
+  try{ json=JSON.parse(text); }catch(e){ throw new Error('dados/sessoes.json existe mas não é um JSON válido.'); }
+  if(!Array.isArray(json.sessoes)) json.sessoes=[];
+  return {json,sha:data.sha};
+}
+async function ghWriteSessoes(token,json,sha,novaSessao,isRetry){
+  const url=`https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_PATH}`;
+  const body={
+    message:`Sessão de ${novaSessao.data.split('-').reverse().join('/')} — ${novaSessao.total} flechas`,
+    content:b64EncodeUtf8(JSON.stringify(json,null,2)),
+    branch:GH_BRANCH
+  };
+  if(sha) body.sha=sha;
+  const resp=await fetch(url,{method:'PUT',headers:ghHeaders(token),body:JSON.stringify(body)});
+  if(resp.status===409&&!isRetry){
+    const fresh=await ghReadSessoes(token);
+    applySessionToStore(fresh.json,novaSessao,'replace');
+    return ghWriteSessoes(token,fresh.json,fresh.sha,novaSessao,true);
+  }
+  if(!resp.ok) throw await ghError(resp);
+  return resp.json();
+}
+function applySessionToStore(store,novaSessao,mode){
+  const idx=store.sessoes.findIndex(s=>s.data===novaSessao.data);
+  if(idx>=0&&mode==='replace') store.sessoes[idx]=novaSessao;
+  else store.sessoes.push(novaSessao);
+  store.sessoes.sort((a,b)=>a.data<b.data?-1:a.data>b.data?1:0);
+  store.versao=store.versao||1;
+  store.atualizadoEm=new Date().toISOString();
+}
+function askDuplicateChoice(dateIso){
+  return new Promise(resolve=>{
+    $('dupDate').textContent=dateIso.split('-').reverse().join('/');
+    $('dupModal').classList.add('on');
+    const done=v=>{ $('dupModal').classList.remove('on'); cleanup(); resolve(v); };
+    const onReplace=()=>done('replace'), onBoth=()=>done('both'), onCancel=()=>done('cancel');
+    function cleanup(){
+      $('dupReplace').removeEventListener('click',onReplace);
+      $('dupBoth').removeEventListener('click',onBoth);
+      $('dupCancel').removeEventListener('click',onCancel);
+    }
+    $('dupReplace').addEventListener('click',onReplace);
+    $('dupBoth').addEventListener('click',onBoth);
+    $('dupCancel').addEventListener('click',onCancel);
+  });
+}
+function showSaveMsg(html,cls){ $('saveMsg').innerHTML=`<div class="${cls}">${html}</div>`; }
+function setSaveBusy(b){ $('btnSave').disabled=b; $('btnSave').textContent=b?'☁️ Salvando…':'☁️ Salvar sessão no GitHub'; }
+
+$('btnSave').onclick=async()=>{
+  if(!S.arrows.length){ showSaveMsg('Marque ao menos uma flecha antes de salvar.','err'); return; }
+  const token=getToken();
+  if(!token){ showSaveMsg('Nenhum token configurado. Clique na engrenagem ⚙️ para colar seu token do GitHub.','err'); openGear(); return; }
+  const novaSessao=buildSessionPayload();
+  setSaveBusy(true); showSaveMsg('','ok');
+  try{
+    const {json,sha}=await ghReadSessoes(token);
+    const dup=json.sessoes.some(s=>s.data===novaSessao.data);
+    let mode='replace';
+    if(dup){
+      const choice=await askDuplicateChoice(novaSessao.data);
+      if(choice==='cancel'){ setSaveBusy(false); return; }
+      mode=choice;
+    }
+    applySessionToStore(json,novaSessao,mode);
+    await ghWriteSessoes(token,json,sha,novaSessao);
+    showSaveMsg('✅ Sessão salva no GitHub! O dashboard já vai mostrar ela na próxima carga.','ok');
+  }catch(e){
+    showSaveMsg(`❌ Não consegui salvar no GitHub: ${e.message}. A sessão continua guardada aqui no navegador — use "Baixar JSON" ou "Copiar contagens" como alternativa enquanto isso.`,'err');
+  }finally{ setSaveBusy(false); }
+};
+
+// ---- modal de token ----
+function openGear(){
+  $('tokInput').value=getToken();
+  updateTokStat();
+  $('gearModal').classList.add('on');
+}
+function updateTokStat(){
+  const has=!!getToken();
+  const el=$('tokStat');
+  el.textContent=has?'Token configurado neste navegador.':'Nenhum token configurado.';
+  el.className='tokstat '+(has?'set':'unset');
+}
+$('btnGear').onclick=openGear;
+$('tokClose').onclick=()=>$('gearModal').classList.remove('on');
+$('tokSave').onclick=()=>{
+  const v=($('tokInput').value||'').trim();
+  if(!v){ return; }
+  try{ localStorage.setItem('arrowreg_gh_token',v); }catch(e){}
+  updateTokStat();
+  showSaveMsg('Token salvo. Já pode tentar salvar a sessão.','ok');
+  $('gearModal').classList.remove('on');
+};
+$('tokRemove').onclick=()=>{
+  try{ localStorage.removeItem('arrowreg_gh_token'); }catch(e){}
+  $('tokInput').value='';
+  updateTokStat();
+};
+
 restore();
 $('cfgDate').value=S.date; $('cfgPer').value=S.per; $('cfgDiam').value=S.diam;
+$('cfgAutoAdvance').checked=autoAdvance; $('cfgShowAll').checked=showAll;
+$('notesInput').value=S.notes||'';
 render();
 </script>
 </body>

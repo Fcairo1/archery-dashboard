@@ -103,6 +103,23 @@ select{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size
   <div id="dNotes"></div>
 </div>
 
+<div class="card" id="spatialCard" style="display:none">
+  <h2>Análise espacial <span style="font-weight:400;color:var(--muted)">(sessões registradas no site, com coordenada por flecha)</span></h2>
+  <div class="row" style="display:flex;gap:10px;align-items:center;margin-bottom:10px">
+    <select id="spatialScope"></select>
+  </div>
+  <div class="grid2">
+    <div>
+      <svg id="spatialMap" viewBox="-220 -220 440 440" xmlns="http://www.w3.org/2000/svg" style="width:100%;max-width:320px;display:block;margin:0 auto;background:#eef2f7;border-radius:10px"></svg>
+    </div>
+    <div>
+      <div class="detail-kpis" id="spatialKpis"></div>
+      <div class="chartbox" style="height:190px"><canvas id="chSpatialTrend"></canvas></div>
+      <div class="legend-note">Pontuação média por rodada — queda ao longo da sessão pode indicar fadiga.</div>
+    </div>
+  </div>
+</div>
+
 <div class="card">
   <h2>Marcos</h2>
   <div id="mstones"></div>
@@ -201,6 +218,18 @@ function extractSessions(csvText){
     }
   }
   return raw.map(({d,col,...rest})=>rest);
+}
+
+// ===== fusão planilha + dados/sessoes.json (registrador) =====
+function normalizeJsonSession(s){
+  return {iso:s.data, total:s.total, counts:s.counts, avg:s.media,
+    notes:s.notas?[s.notas]:[], rodadas:s.rodadas||[]};
+}
+function mergeSources(sheetSessions,jsonSessions){
+  const map=new Map();
+  for(const s of sheetSessions) map.set(s.iso,{...s,source:'sheet'});
+  for(const j of jsonSessions) map.set(j.iso,{...j,source:'json'});
+  return [...map.values()].sort((a,b)=>a.iso<b.iso?-1:a.iso>b.iso?1:0);
 }
 
 // ===== métricas =====
@@ -450,6 +479,85 @@ function renderMilestones(){
   $('mstones').innerHTML=MILESTONES.map(([d,l])=>`<div class="mstone"><span class="dt">${dBR(d)}</span><span>${l}</span></div>`).join('');
 }
 
+// ===== análise espacial (Tarefa D) =====
+function spatialSessions(){ return ALL.filter(s=>s.rodadas&&s.rodadas.length); }
+function spatialShots(scope){
+  const sessions = scope==='all' ? spatialSessions() : spatialSessions().filter(s=>s.iso===scope);
+  const shots=[];
+  for(const s of sessions){
+    for(const r of s.rodadas){
+      for(const f of r.flechas){
+        shots.push({cat:f.cat,x:f.xMm,y:f.yMm,round:r.numero});
+      }
+    }
+  }
+  return shots;
+}
+function spatialStats(shots){
+  const hits=shots.filter(s=>s.x!=null&&s.y!=null);
+  if(!hits.length) return null;
+  const mx=hits.reduce((a,s)=>a+s.x,0)/hits.length, my=hits.reduce((a,s)=>a+s.y,0)/hits.length;
+  const dists=hits.map(s=>Math.hypot(s.x-mx,s.y-my)).sort((a,b)=>a-b);
+  const mean=dists.reduce((a,b)=>a+b,0)/dists.length;
+  const median=dists.length%2?dists[(dists.length-1)/2]:(dists[dists.length/2-1]+dists[dists.length/2])/2;
+  const pctl=p=>dists[Math.min(dists.length-1,Math.ceil(p*dists.length)-1)];
+  return {mx,my,n:hits.length,total:shots.length,mean,median,r50:pctl(.5),r80:pctl(.8),r90:pctl(.9)};
+}
+function roundTrend(shots){
+  const byRound=new Map();
+  for(const s of shots){ if(!byRound.has(s.round)) byRound.set(s.round,[]); byRound.get(s.round).push(s.cat); }
+  const rounds=[...byRound.keys()].sort((a,b)=>a-b);
+  return {labels:rounds.map(r=>'R'+r),data:rounds.map(r=>{const arr=byRound.get(r);return arr.reduce((a,b)=>a+b,0)/arr.length;})};
+}
+function drawSpatialMap(shots){
+  const svg=$('spatialMap'); svg.innerHTML='';
+  const R_OUT=200, zones=[[200,1],[180,2],[160,3],[140,4],[120,5],[100,6],[80,7],[60,8],[40,9],[20,10]];
+  for(const [r,cat] of zones) svg.appendChild(el('circle',{cx:0,cy:0,r,fill:RING_COLORS[cat],stroke:cat===3||cat===4?'#94a3b8':'#334155','stroke-width':.7}));
+  svg.appendChild(el('circle',{cx:0,cy:0,r:10,fill:'none',stroke:'#334155','stroke-width':.7}));
+  const hits=shots.filter(s=>s.x!=null&&s.y!=null);
+  for(const s of hits) svg.appendChild(el('circle',{cx:s.x,cy:s.y,r:3,fill:'#111827',opacity:.55,stroke:'#fff','stroke-width':.6}));
+  const st=spatialStats(shots);
+  if(st){
+    const g=el('g',{});
+    g.appendChild(el('line',{x1:st.mx-8,y1:st.my,x2:st.mx+8,y2:st.my,stroke:'#0ea5e9','stroke-width':2}));
+    g.appendChild(el('line',{x1:st.mx,y1:st.my-8,x2:st.mx,y2:st.my+8,stroke:'#0ea5e9','stroke-width':2}));
+    svg.appendChild(g);
+  }
+}
+function el(t,attrs){const NS='http://www.w3.org/2000/svg';const e=document.createElementNS(NS,t);for(const k in attrs)e.setAttribute(k,attrs[k]);return e;}
+function setupSpatial(){
+  const sessions=spatialSessions();
+  $('spatialCard').style.display=sessions.length?'':'none';
+  if(!sessions.length) return;
+  const sel=$('spatialScope'); sel.innerHTML='';
+  const optAll=document.createElement('option'); optAll.value='all'; optAll.textContent='Todas as sessões com coordenadas';
+  sel.appendChild(optAll);
+  sessions.forEach(s=>{const o=document.createElement('option');o.value=s.iso;o.textContent=dBR(s.iso);sel.appendChild(o);});
+  sel.onchange=()=>renderSpatial(sel.value);
+  renderSpatial('all');
+}
+function renderSpatial(scope){
+  const shots=spatialShots(scope);
+  drawSpatialMap(shots);
+  const st=spatialStats(shots);
+  if(!st){ $('spatialKpis').innerHTML='<div>Sem flechas com coordenada nesta seleção.</div>'; return; }
+  const horiz=st.mx>1?`${Math.abs(st.mx).toFixed(0)} mm à direita`:st.mx<-1?`${Math.abs(st.mx).toFixed(0)} mm à esquerda`:null;
+  const vert=st.my>1?`${Math.abs(st.my).toFixed(0)} mm abaixo`:st.my<-1?`${Math.abs(st.my).toFixed(0)} mm acima`:null;
+  const viesTxt = (horiz||vert) ? `seu agrupamento está ${[horiz,vert].filter(Boolean).join(' e ')} do centro` : 'seu agrupamento está bem centrado';
+  $('spatialKpis').innerHTML=`
+    <div style="flex-basis:100%">Viés do agrupamento<b style="font-size:13px;font-weight:600">${viesTxt}</b></div>
+    <div>Distância média<b>${fmt(st.mean,0)} mm</b></div>
+    <div>Distância mediana<b>${fmt(st.median,0)} mm</b></div>
+    <div>Raio 50%<b>${fmt(st.r50,0)} mm</b></div>
+    <div>Raio 80%<b>${fmt(st.r80,0)} mm</b></div>
+    <div>Raio 90%<b>${fmt(st.r90,0)} mm</b></div>`;
+  const trend=roundTrend(shots);
+  mkChart('chSpatialTrend',{type:'line',
+    data:{labels:trend.labels,datasets:[{label:'Pontuação média',data:trend.data,borderColor:'#b45309',pointRadius:3,tension:.25}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}}});
+}
+
 // ===== carga =====
 async function fetchSessions(){
   let lastErr;
@@ -466,18 +574,40 @@ async function fetchSessions(){
   }
   throw lastErr||new Error('sem URL');
 }
-async function load(){
-  let live=false;
+async function fetchJsonSessions(){
   try{
-    ALL=(await fetchSessions()).map(enrich); live=true;
+    const resp=await fetch('dados/sessoes.json',{cache:'no-store'});
+    if(!resp.ok) return [];
+    const j=await resp.json();
+    return (j.sessoes||[]).map(normalizeJsonSession);
+  }catch(e){ return []; }
+}
+async function load(){
+  let live=false, sheetSessions=[], sheetErr=null;
+  const jsonSessions=await fetchJsonSessions();
+  try{
+    sheetSessions=await fetchSessions(); live=true;
   }catch(e){
-    ALL=FALLBACK.map(([iso,total,counts,avg])=>enrich({iso,total,counts,avg,notes:[]}));
-    $('banner').style.display='block';
-    $('banner').textContent='Não consegui ler a planilha ao vivo agora ('+e.message+') — mostrando os dados salvos até 16/08/2025. Recarregue para tentar de novo.';
+    sheetErr=e;
+    if(!jsonSessions.length){
+      sheetSessions=FALLBACK.map(([iso,total,counts,avg])=>({iso,total,counts,avg,notes:[]}));
+    }
   }
+  if(sheetErr){
+    $('banner').style.display='block';
+    $('banner').textContent = jsonSessions.length
+      ? `Não consegui ler a planilha ao vivo agora (${sheetErr.message}) — mostrando só as ${jsonSessions.length} sessões registradas no site.`
+      : `Não consegui ler a planilha ao vivo agora (${sheetErr.message}) — mostrando os dados salvos até 16/08/2025. Recarregue para tentar de novo.`;
+  }
+  const merged=mergeSources(sheetSessions,jsonSessions);
+  ALL=merged.map(enrich);
   const last=ALL[ALL.length-1];
-  $('sub').textContent=`${ALL.length} sessões · ${ALL.reduce((a,s)=>a+s.n,0).toLocaleString('pt-BR')} flechas · última em ${dBR(last.iso)}${live?' · dados ao vivo da planilha':''}`;
-  buildChips(); renderMilestones();
+  const nSheet=merged.filter(s=>s.source==='sheet').length;
+  const nJson=merged.filter(s=>s.source==='json').length;
+  $('sub').textContent = nJson
+    ? `${nSheet} sessões da planilha + ${nJson} registradas no site · última em ${dBR(last.iso)}${live?' · dados ao vivo da planilha':''}`
+    : `${ALL.length} sessões · ${ALL.reduce((a,s)=>a+s.n,0).toLocaleString('pt-BR')} flechas · última em ${dBR(last.iso)}${live?' · dados ao vivo da planilha':''}`;
+  buildChips(); renderMilestones(); setupSpatial();
   const saved=localStorage.getItem('arrowdash_era')||'all';
   setFilter(['all',...ERAS.map(e=>e.id),...EXTRA_FILTERS.map(x=>x.id)].includes(saved)?saved:'all');
 }
