@@ -97,6 +97,9 @@ a{color:var(--accent)}
     <button id="btnPrevRound">‹ Rodada anterior</button>
     <button id="btnNextRound" class="primary">Próxima rodada ›</button>
   </div>
+  <div class="navbtns">
+    <button id="btnFinish" class="accent">🏁 Finalizar sessão e voltar ao dashboard</button>
+  </div>
   <label class="toggle-row"><input type="checkbox" id="cfgAutoAdvance"> avançar automaticamente ao completar a rodada</label>
   <label class="toggle-row"><input type="checkbox" id="cfgShowAll"> ver todas as flechas da sessão</label>
 
@@ -206,7 +209,8 @@ function classify(x,y,arrowDiamMm){
 let S={date:new Date().toISOString().slice(0,10),per:5,diam:6,arrows:[],roundLimits:{},activeRound:1,notes:'',photo:null,cal:null};
 let sel=-1, zoom=false, calStep=null, autoAdvance=true, showAll=false;
 
-function save(){ try{localStorage.setItem('arrowreg_session',JSON.stringify({...S,photo:null,cal:S.cal}));}catch(e){} }
+let leaving=false;
+function save(){ if(leaving) return; try{localStorage.setItem('arrowreg_session',JSON.stringify({...S,photo:null,cal:S.cal}));}catch(e){} }
 function restore(){
   try{
     const d=JSON.parse(localStorage.getItem('arrowreg_session')||'null');
@@ -304,11 +308,11 @@ $('alvo').addEventListener('pointerdown',ev=>{
     calStep=null; setHint('Calibrado! Agora clique nas flechas em cima da foto. Confira se os anéis rosa batem com o alvo; se não, recarregue a foto.');
     render(); return;
   }
-  if(Math.hypot(p.x,p.y)>R_OUT+18) return;
   addArrow(p.x,p.y);
 });
 function addArrow(x,y){
-  const cat=(x==null)?0:classify(x,y,S.diam);
+  let cat=(x==null)?0:classify(x,y,S.diam);
+  if(cat===0&&x!=null){ x=null; y=null; toast('Fora do alvo registrado.'); } // clique fora dos anéis = erro, sem coordenada
   S.arrows.push({x,y,cat,round:S.activeRound});
   sel=S.arrows.length-1;
   maybeAutoAdvance();
@@ -498,11 +502,15 @@ function askDuplicateChoice(dateIso){
 function showSaveMsg(html,cls){ $('saveMsg').innerHTML=`<div class="${cls}">${html}</div>`; }
 function setSaveBusy(b){ $('btnSave').disabled=b; $('btnSave').textContent=b?'☁️ Salvando…':'☁️ Salvar sessão no GitHub'; }
 
-$('btnSave').onclick=async()=>{
-  if(!S.arrows.length){ showSaveMsg('Marque ao menos uma flecha antes de salvar.','err'); return; }
+let savedKey=null;
+function sessionKey(){ return JSON.stringify([S.date,S.diam,S.arrows.map(a=>[a.x,a.y,a.cat,a.round]),($('notesInput').value||'').trim()]); }
+// devolve 'saved' | 'cancel' | 'notoken' | 'error'
+async function saveSession(){
+  if(!S.arrows.length){ showSaveMsg('Marque ao menos uma flecha antes de salvar.','err'); return 'error'; }
   const token=getToken();
-  if(!token){ showSaveMsg('Nenhum token configurado. Clique na engrenagem ⚙️ para colar seu token do GitHub.','err'); openGear(); return; }
+  if(!token){ showSaveMsg('Nenhum token configurado. Clique na engrenagem ⚙️ para colar seu token do GitHub.','err'); openGear(); return 'notoken'; }
   const novaSessao=buildSessionPayload();
+  const key=sessionKey();
   setSaveBusy(true); showSaveMsg('','ok');
   try{
     const {json,sha}=await ghReadSessoes(token);
@@ -510,15 +518,33 @@ $('btnSave').onclick=async()=>{
     let mode='replace';
     if(dup){
       const choice=await askDuplicateChoice(novaSessao.data);
-      if(choice==='cancel'){ setSaveBusy(false); return; }
+      if(choice==='cancel') return 'cancel';
       mode=choice;
     }
     applySessionToStore(json,novaSessao,mode);
     await ghWriteSessoes(token,json,sha,novaSessao);
+    savedKey=key;
     showSaveMsg('✅ Sessão salva no GitHub! O dashboard já vai mostrar ela na próxima carga.','ok');
+    return 'saved';
   }catch(e){
     showSaveMsg(`❌ Não consegui salvar no GitHub: ${e.message}. A sessão continua guardada aqui no navegador — use "Baixar JSON" ou "Copiar contagens" como alternativa enquanto isso.`,'err');
+    return 'error';
   }finally{ setSaveBusy(false); }
+}
+$('btnSave').onclick=saveSession;
+function goDashboard(clearDraft){
+  leaving=true;
+  if(clearDraft){ try{localStorage.removeItem('arrowreg_session');}catch(e){} }
+  location.href='index.html';
+}
+$('btnFinish').onclick=async()=>{
+  if(!S.arrows.length){ goDashboard(true); return; }
+  if(sessionKey()===savedKey){ goDashboard(true); return; }
+  $('btnFinish').disabled=true;
+  const r=await saveSession();
+  $('btnFinish').disabled=false;
+  if(r==='saved'){ toast('Sessão salva! Indo para o dashboard…'); setTimeout(()=>goDashboard(true),900); }
+  else if(r==='error' && confirm('Não consegui salvar a sessão no GitHub. Sair mesmo assim? O rascunho continua guardado neste navegador.')) goDashboard(false);
 };
 
 // ---- modal de token ----
